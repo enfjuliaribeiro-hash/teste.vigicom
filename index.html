@@ -1,0 +1,2425 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VigiCom SUS - Vigilância Comunitária (Modo Local)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf para exportação de PDF robusta -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+    <!-- Leaflet para Mapas -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+        
+        @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .animate-slide-up { animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-fade { animation: fadeIn 0.3s ease-in-out; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+        /* Role-based visibility controls */
+        .only-relator, .only-gestor, .only-observador { display: none !important; }
+        
+        .is-relator .only-relator { display: flex !important; }
+        .is-gestor .only-gestor { display: flex !important; }
+        .is-observador .only-observador { display: flex !important; }
+        
+        .is-relator button.only-relator, .is-relator a.only-relator { display: inline-flex !important; }
+        .is-gestor button.only-gestor, .is-gestor a.only-gestor { display: inline-flex !important; }
+        .is-observador button.only-observador, .is-observador a.only-observador { display: inline-flex !important; }
+
+        .is-relator div.only-relator { display: block !important; }
+        .is-gestor div.only-gestor { display: block !important; }
+        .is-observador div.only-observador { display: block !important; }
+
+        .is-relator div.only-relator.flex { display: flex !important; }
+        .is-gestor div.only-gestor.flex { display: flex !important; }
+        .is-observador div.only-observador.flex { display: flex !important; }
+
+        /* Hiding blocks from specific roles */
+        .is-relator .hide-relator { display: none !important; }
+        .is-gestor .hide-gestor { display: none !important; }
+        .is-observador .hide-observador { display: none !important; }
+
+        #main-app { display: none; }
+        #main-app.logged-in { display: block; }
+
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        
+        #btnSaveEval:disabled { background-color: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+        
+        .logo-pb { filter: grayscale(100%) contrast(120%) opacity(70%); mix-blend-mode: multiply; }
+
+        /* Estilo Leaflet */
+        .leaflet-container { z-index: 10 !important; font-family: 'Inter', sans-serif; }
+
+        /* Estilo para Custom Dropdowns (<details>) */
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
+        /* Estilos para o modo de impressão (PDF) */
+        @media print {
+            body { background: white; }
+            nav, footer, .no-print { display: none !important; }
+            #main-app, main { display: block !important; padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+            .shadow-sm, .shadow-xl { box-shadow: none !important; }
+            .border { border: 1px solid #e2e8f0 !important; }
+            .view-section { display: none; }
+            .view-section.active { display: block; }
+            .print-break { page-break-inside: avoid; }
+            h2 { margin-top: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-[#F8FAFC] text-slate-900 transition-colors duration-500 flex flex-col min-h-screen">
+
+    <div id="toast-container" class="fixed top-6 right-6 z-[100] space-y-3 pointer-events-none no-print"></div>
+
+    <!-- Tela de Login & Cadastro -->
+    <div id="login-screen" class="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#ECFDF5] to-[#F0FDF4] no-print">
+        
+        <!-- Box de Login -->
+        <div id="login-box" class="bg-white w-full max-w-[420px] p-10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(16,185,129,0.05)] border border-emerald-50 animate-fade">
+            <div class="flex flex-col items-center mb-6 text-center">
+                <div class="w-16 h-16 bg-emerald-400 rounded-2xl flex items-center justify-center text-white mb-6 shadow-xl shadow-emerald-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+                <h1 class="text-3xl font-extrabold tracking-tight"><span class="text-slate-900">Vigi</span><span class="text-emerald-500">COM</span> <span class="text-[#005b9f]">SUS</span></h1>
+                <p class="text-slate-400 text-sm mt-2 font-medium">Plataforma de Vigilância Comunitária</p>
+            </div>
+
+            <form id="loginForm" class="space-y-5">
+                <div class="space-y-1.5"><label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">E-mail</label><input type="email" id="l-email" required class="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-400/20 outline-none" placeholder="exemplo@email.com" value="admin@admin.com"></div>
+                <div class="space-y-1.5"><label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Senha</label><input type="password" id="l-password" required class="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-400/20 outline-none" placeholder="••••••••" value="admin123"></div>
+                <div class="space-y-1.5">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Acessar Como</label>
+                    <select id="l-role" class="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none">
+                        <option value="gestor">Gestão CIEVS (Secretaria)</option>
+                        <option value="relator">Relator (Vigilância Comunitária)</option>
+                        <option value="observador">Observador (Visualização)</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-emerald-500 shadow-lg transition-all flex items-center justify-center gap-2 group">Entrar no Sistema <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-hover:translate-x-1 transition-transform"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></button>
+            </form>
+            
+            <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+                <p class="text-sm font-medium text-slate-500">Ainda não faz parte da rede?</p>
+                <button onclick="toggleAuthMode()" class="mt-2 text-sm font-bold text-emerald-500 hover:text-emerald-600 transition-colors">Solicitar Acesso (Criar Conta)</button>
+            </div>
+            <div id="login-error-container" class="mt-4"></div>
+        </div>
+
+        <!-- Box de Cadastro -->
+        <div id="register-box" class="bg-white w-full max-w-2xl p-10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(16,185,129,0.05)] border border-emerald-50 animate-fade hidden">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Solicitar Acesso</h2>
+                <p class="text-slate-400 text-sm mt-2 font-medium">Preencha o formulário. O acesso será avaliado pela Gestão.</p>
+            </div>
+
+            <form id="registerSelfForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="col-span-1 md:col-span-2">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Nome Completo</label>
+                        <input type="text" id="reg-name" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold">
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">E-mail</label>
+                        <input type="email" id="reg-email" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold">
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Senha</label>
+                        <input type="password" id="reg-password" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold">
+                    </div>
+                    
+                    <div class="col-span-1 md:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                        <h3 class="text-xs font-bold text-slate-800 mb-3 uppercase tracking-wider">Endereço</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="col-span-1 md:col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">CEP</label>
+                                <input type="text" id="reg-cep" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold" placeholder="00000-000" maxlength="9">
+                            </div>
+                            <div class="col-span-1 md:col-span-3">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Logradouro</label>
+                                <input type="text" id="reg-logradouro" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold" placeholder="Rua, Avenida, Viela...">
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Número</label>
+                                <div class="flex gap-2 items-center mt-1">
+                                    <input type="text" id="reg-numero" required class="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold" placeholder="Ex: 123">
+                                    <label class="flex items-center gap-2 px-3 py-3 bg-slate-50 border border-slate-100 rounded-xl cursor-pointer whitespace-nowrap hover:bg-slate-100 transition-colors">
+                                        <input type="checkbox" id="reg-sn" onchange="toggleSN('reg-sn', 'reg-numero')" class="w-4 h-4 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500">
+                                        <span class="text-xs font-bold text-slate-500">S/N</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Bairro</label>
+                                <input type="text" id="reg-bairro" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold" placeholder="Bairro">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-span-1 border-t border-slate-100 pt-4 mt-2">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Nascimento</label>
+                        <input type="date" id="reg-dob" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold text-slate-600">
+                    </div>
+                    <div class="col-span-1 border-t border-slate-100 pt-4 mt-2">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Gênero</label>
+                        <select id="reg-gender" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold text-slate-600">
+                            <option value="">Selecione...</option>
+                            <option value="Cisgênero">Cisgênero</option>
+                            <option value="Homem Trans">Homem Trans</option>
+                            <option value="Mulher Trans">Mulher Trans</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Raça/Cor</label>
+                        <select id="reg-race" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold text-slate-600">
+                            <option value="">Selecione...</option>
+                            <option value="Amarela">Amarela</option>
+                            <option value="Branca">Branca</option>
+                            <option value="Parda">Parda</option>
+                            <option value="Preta">Preta</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Distrito Atuação</label>
+                        <select id="reg-district" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold text-slate-600">
+                            <option value="">Selecione...</option>
+                            <option value="Eldorado">Eldorado</option>
+                            <option value="Industrial">Industrial</option>
+                            <option value="Nacional">Nacional</option>
+                            <option value="Petrolância">Petrolância</option>
+                            <option value="Ressaca">Ressaca</option>
+                            <option value="Riacho">Riacho</option>
+                            <option value="Sede">Sede</option>
+                            <option value="Vargem das Flores">Vargem das Flores</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1 md:col-span-2 mt-2">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1 block mb-2">Perfil Solicitado</label>
+                        <div class="flex gap-4 flex-wrap">
+                            <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer flex-1 border border-slate-100 hover:bg-slate-100 min-w-[120px]"><input type="checkbox" id="reg-role-relator" value="relator" class="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"> <span class="text-xs font-bold">Relator</span></label>
+                            <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer flex-1 border border-slate-100 hover:bg-slate-100 min-w-[120px]"><input type="checkbox" id="reg-role-gestor" value="gestor" class="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"> <span class="text-xs font-bold">Gestão</span></label>
+                            <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer flex-1 border border-slate-100 hover:bg-slate-100 min-w-[120px]"><input type="checkbox" id="reg-role-observador" value="observador" class="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"> <span class="text-xs font-bold">Observador</span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex flex-col gap-3">
+                    <button type="submit" class="w-full bg-emerald-500 text-white py-4 rounded-xl font-bold hover:bg-emerald-600 shadow-lg transition-all">Enviar Solicitação</button>
+                    <button type="button" onclick="toggleAuthMode()" class="w-full bg-slate-50 text-slate-500 py-3 rounded-xl font-bold hover:bg-slate-100 transition-all text-sm">Cancelar / Voltar ao Login</button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- Aplicação Principal -->
+    <div id="main-app" class="flex-1 flex flex-col hidden">
+        <nav class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40 no-print">
+            <div class="max-w-[90rem] mx-auto px-6 h-20 flex justify-between items-center">
+                <div class="flex items-center gap-3 cursor-pointer group" onclick="showView('landing')">
+                    <div class="bg-emerald-400 w-10 h-10 rounded-xl flex items-center justify-center text-white group-hover:rotate-6 transition-transform"><i data-lucide="search" class="w-6 h-6"></i></div>
+                    <div class="flex flex-col leading-none">
+                        <span class="font-extrabold text-xl"><span class="text-slate-900">Vigi</span><span class="text-emerald-500">COM</span> <span class="text-[#005b9f]">SUS</span></span>
+                        <span id="role-tag" class="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500 mt-1">Perfil</span>
+                    </div>
+                </div>
+                
+                <div class="hidden md:flex items-center gap-2">
+                    <button onclick="showView('report')" class="only-relator px-4 py-2 text-sm font-bold text-slate-600 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-2"><i data-lucide="plus-circle" class="w-4 h-4"></i> Novo Relato</button>
+                    <button onclick="showView('list')" class="hide-observador px-4 py-2 text-sm font-bold text-slate-600 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4"></i> Relatos</button>
+                    <button onclick="showView('negatives')" class="hide-observador px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all flex items-center gap-2"><i data-lucide="calendar-x" class="w-4 h-4"></i> Relatos Ausentes</button>
+                    <button onclick="showView('map')" class="only-gestor px-4 py-2 text-sm font-bold text-slate-600 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all items-center gap-2"><i data-lucide="map-pin" class="w-4 h-4"></i> Mapa</button>
+                    <button onclick="showView('dashboard')" class="hide-relator px-4 py-2 text-sm font-bold text-slate-600 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all items-center gap-2"><i data-lucide="bar-chart-big" class="w-4 h-4"></i> Painel</button>
+                    <button onclick="showView('indicadores')" class="hide-relator px-4 py-2 text-sm font-bold text-slate-600 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all items-center gap-2"><i data-lucide="pie-chart" class="w-4 h-4"></i> Indicadores</button>
+                    <button onclick="showView('users')" class="only-gestor px-4 py-2 text-sm font-bold text-slate-600 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i> Usuários</button>
+                </div>
+                
+                <div class="flex items-center gap-2 border-l border-slate-100 pl-6">
+                    <button onclick="showView('profile')" class="px-3 py-2 text-sm font-bold text-slate-500 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-2" title="Meu Perfil"><i data-lucide="user-circle" class="w-5 h-5"></i> <span class="hidden md:inline" id="navbar-user-name">Meu Perfil</span></button>
+                    <button onclick="handleLogout()" class="w-10 h-10 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all flex items-center justify-center" title="Sair"><i data-lucide="log-out" class="w-5 h-5"></i></button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="max-w-[90rem] mx-auto px-6 py-10 flex-1 w-full">
+            
+            <!-- Vista: Landing -->
+            <section id="view-landing" class="view-section active animate-slide-up">
+                <div class="max-w-5xl mx-auto text-center space-y-12 py-10">
+                    <div class="space-y-4">
+                        <h1 class="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight uppercase">Vigilância conectada ao seu <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">território</span></h1>
+                        <p class="text-lg text-slate-500 max-w-2xl mx-auto font-medium">Sua participação fortalece o SUS 🚀</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-center items-stretch text-left">
+                        <button onclick="showView('report')" class="only-relator group p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-400 group-hover:text-white transition-all"><i data-lucide="send" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Novo Relato</h3><p class="text-slate-400 font-medium mt-1 text-xs">Notificar evento no território.</p></div>
+                        </button>
+
+                        <button onclick="showView('negative-form')" class="only-relator group p-8 bg-white border border-red-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 group-hover:bg-red-500 group-hover:text-white transition-all"><i data-lucide="shield-check" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Relato Ausente</h3><p class="text-slate-400 font-medium mt-1 text-xs">Aviso semanal (Sexta-feira).</p></div>
+                        </button>
+
+                        <button onclick="showView('list')" class="hide-observador group p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-teal-50 rounded-2xl flex items-center justify-center text-teal-500 group-hover:bg-teal-400 group-hover:text-white transition-all"><i data-lucide="search" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Acompanhamento</h3><p class="text-slate-400 font-medium mt-1 text-xs">Status das notificações.</p></div>
+                        </button>
+                        
+                        <button onclick="showView('dashboard')" class="hide-relator group p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all"><i data-lucide="bar-chart-big" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Dashboards</h3><p class="text-slate-400 font-medium mt-1 text-xs">Painel geral de métricas.</p></div>
+                        </button>
+
+                        <button onclick="showView('indicadores')" class="hide-relator group p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-500 group-hover:bg-purple-500 group-hover:text-white transition-all"><i data-lucide="pie-chart" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Indicadores</h3><p class="text-slate-400 font-medium mt-1 text-xs">Avaliação de desempenho.</p></div>
+                        </button>
+
+                        <button onclick="showView('negatives')" class="hide-observador group p-8 bg-white border border-red-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 group-hover:bg-red-500 group-hover:text-white transition-all"><i data-lucide="calendar-x" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Relatos Ausentes</h3><p class="text-slate-400 font-medium mt-1 text-xs">Histórico de ausências.</p></div>
+                        </button>
+
+                        <button onclick="showView('users')" class="only-gestor group p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:shadow-xl transition-all flex flex-col gap-6">
+                            <div class="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 group-hover:bg-green-500 group-hover:text-white transition-all"><i data-lucide="user-cog" class="w-7 h-7"></i></div>
+                            <div><h3 class="text-xl font-extrabold text-slate-800">Controle</h3><p class="text-slate-400 font-medium mt-1 text-xs">Gerenciar usuários e Mapa.</p></div>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista: Novo Relato -->
+            <section id="view-report" class="view-section animate-slide-up">
+                <div class="max-w-2xl mx-auto bg-white p-12 rounded-[3rem] shadow-sm border border-slate-50 no-print">
+                    <header class="mb-10 text-center">
+                        <h2 class="text-3xl font-black text-slate-900 tracking-tight">Novo Relato</h2>
+                        <p class="text-slate-400 text-sm mt-1">Preencha todos os detalhes para cadastrar o relato.</p>
+                    </header>
+                    <form id="rumorForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-2"><input type="text" id="f-title" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold" placeholder="Título do Evento"></div>
+                            <div class="md:col-span-1">
+                                <select id="f-category" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-600 outline-none focus:ring-2 focus:ring-emerald-400">
+                                    <option value="">Categoria...</option>
+                                    <option value="Acidente/Desastre Ambiental">Acidente/Desastre Ambiental</option>
+                                    <option value="Alimentos">Alimentos</option>
+                                    <option value="Condição Ambiental Suspeita">Condição Ambiental Suspeita</option>
+                                    <option value="Doenças Transmissíveis">Doenças Transmissíveis</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            
+                            <div class="md:col-span-1">
+                                <select id="f-involved-count" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-600 outline-none focus:ring-2 focus:ring-emerald-400">
+                                    <option value="">Quantos envolvidos?</option>
+                                    <option value="Apenas 1">Apenas 1</option>
+                                    <option value="Entre 2 e 5">Entre 2 e 5</option>
+                                    <option value="Mais de 5">Mais de 5</option>
+                                </select>
+                            </div>
+                            
+                            <div class="md:col-span-2 space-y-3">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Quem são os afetados?</label>
+                                <div class="flex flex-wrap gap-4">
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input type="checkbox" name="f-affected" value="Ambiente" class="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500">
+                                        <span class="text-xs font-bold text-slate-700">Ambiente</span>
+                                    </label>
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input type="checkbox" name="f-affected" value="Animais" class="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500">
+                                        <span class="text-xs font-bold text-slate-700">Animais</span>
+                                    </label>
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input type="checkbox" name="f-affected" value="Pessoas" class="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500">
+                                        <span class="text-xs font-bold text-slate-700">Pessoas</span>
+                                    </label>
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input type="checkbox" name="f-affected" value="Outro" id="chk-affected-other" class="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" onchange="toggleAffectedOther()">
+                                        <span class="text-xs font-bold text-slate-700">Outro</span>
+                                    </label>
+                                </div>
+                                <input type="text" id="f-affected-other-text" class="hidden w-full p-4 mt-2 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm" placeholder="Especifique...">
+                            </div>
+
+                            <div class="md:col-span-1"><input type="text" id="f-street" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Logradouro"></div>
+                            <div class="md:col-span-1"><input type="text" id="f-neighborhood" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Bairro"></div>
+                            <div class="md:col-span-1">
+                                <select id="f-district" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold text-slate-600">
+                                    <option value="">Distrito...</option>
+                                    <option value="Eldorado">Eldorado</option>
+                                    <option value="Industrial">Industrial</option>
+                                    <option value="Nacional">Nacional</option>
+                                    <option value="Petrolância">Petrolância</option>
+                                    <option value="Ressaca">Ressaca</option>
+                                    <option value="Riacho">Riacho</option>
+                                    <option value="Sede">Sede</option>
+                                    <option value="Vargem das Flores">Vargem das Flores</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-1"><input type="text" id="f-city" required class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Município" value="Contagem"></div>
+                            <div class="md:col-span-2"><textarea id="f-description" required rows="4" class="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Descrição detalhada..."></textarea></div>
+                            
+                            <div class="md:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1 block mb-3">Informações de Contato no Local (Opcional)</label>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="md:col-span-1"><input type="text" id="f-name" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Nome de Contato"></div>
+                                    <div class="md:col-span-1"><input type="text" id="f-contact" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400" placeholder="Telefone"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-submit-rumor" class="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold hover:bg-emerald-500 shadow-xl transition-all">Enviar Notificação Oficial</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Vista: Formulário Relato Ausente -->
+            <section id="view-negative-form" class="view-section animate-slide-up no-print">
+                <div class="max-w-2xl mx-auto bg-white p-12 rounded-[3rem] shadow-sm border border-slate-50">
+                    <header class="mb-10 text-center">
+                        <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mx-auto mb-6"><i data-lucide="shield-check" class="w-8 h-8"></i></div>
+                        <h2 class="text-3xl font-black text-slate-900 tracking-tight">Relato Ausente</h2>
+                        <p class="text-slate-400 text-sm mt-2">Declaração semanal de ausência de eventos no território.</p>
+                    </header>
+                    <form id="negativeForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Seu Nome</label>
+                                <input type="text" id="n-name" required class="w-full mt-1.5 p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-red-400 transition-all font-semibold text-slate-700" placeholder="Ex: Maria da Silva">
+                            </div>
+                            <div class="md:col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Território / Bairro</label>
+                                <input type="text" id="n-neighborhood" required class="w-full mt-1.5 p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-red-400 transition-all font-semibold text-slate-700" placeholder="Ex: Centro">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="flex items-start gap-4 p-5 bg-red-50/50 border border-red-100 rounded-2xl cursor-pointer hover:bg-red-50 transition-colors">
+                                    <input type="checkbox" id="n-term" required class="mt-1 w-5 h-5 text-red-600 rounded border-red-300 focus:ring-red-500">
+                                    <span class="text-sm font-semibold text-slate-700 leading-relaxed">
+                                        Confirmo que realizei a vigilância em minha comunidade durante esta semana e <strong class="text-red-600">não identifiquei</strong> nenhum relato que necessite de notificação ao CIEVS.
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-red-600 text-white py-5 rounded-2xl font-bold hover:bg-red-700 shadow-xl shadow-red-200 transition-all">Registrar Relato Ausente</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Vista: Lista de Relatos Ausentes -->
+            <section id="view-negatives" class="view-section animate-slide-up">
+                <div class="space-y-8">
+                    <div class="flex flex-row justify-between items-center gap-4 no-print w-full overflow-visible flex-wrap">
+                        <div class="space-y-1 shrink-0">
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Relatos Ausentes</h2>
+                            <p class="text-slate-400 font-medium hidden md:block">Histórico de declarações de ausência de eventos.</p>
+                        </div>
+                        <div class="flex gap-3 items-center overflow-visible flex-wrap md:flex-nowrap justify-end">
+                            <select id="filter-lider-negatives" onchange="renderNegatives()" class="hide-relator px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold outline-none cursor-pointer hover:bg-slate-50 transition-colors w-full md:w-auto max-w-[200px] truncate"></select>
+                            <select id="filter-year-negatives" onchange="renderNegatives()" class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold outline-none cursor-pointer hover:bg-slate-50 transition-colors"></select>
+                            <select id="filter-week-negatives" onchange="renderNegatives()" class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold outline-none cursor-pointer hover:bg-slate-50 transition-colors"></select>
+                            <div class="flex gap-2">
+                                <button onclick="exportToPDF('view-negatives', 'VigiCom_Relatos_Ausentes.pdf')" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 flex gap-2 items-center shrink-0 whitespace-nowrap">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i> PDF
+                                </button>
+                                <button onclick="exportNegativesCSV()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 flex gap-2 items-center shrink-0 whitespace-nowrap">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> CSV
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden print-break">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] border-b border-slate-100">
+                                    <tr>
+                                        <th class="px-8 py-6">Semana Epidemiológica</th>
+                                        <th class="px-8 py-6">Relator / Território</th>
+                                        <th class="px-8 py-6">Data de Registro</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="negatives-table-body" class="divide-y divide-slate-50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista: Lista Monitoramento -->
+            <section id="view-list" class="view-section animate-slide-up">
+                <div class="space-y-8">
+                    <div class="flex flex-row justify-between items-center gap-4 no-print w-full overflow-visible">
+                        <div class="space-y-1 shrink-0">
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Monitoramento</h2>
+                            <p class="text-slate-400 font-medium hidden md:block">Relatos registrados no sistema.</p>
+                        </div>
+                        <div class="flex gap-3 items-center overflow-visible">
+                            <div class="only-gestor">
+                                <div class="flex flex-row flex-wrap xl:flex-nowrap gap-2 justify-end items-center">
+                                    <details class="relative z-50 shrink-0">
+                                        <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Anos <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                        <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-year-list-container"></div>
+                                    </details>
+                                    <details class="relative z-40 shrink-0">
+                                        <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Semanas <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                        <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-week-list-container"></div>
+                                    </details>
+                                    <details class="relative z-30 shrink-0">
+                                        <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Distritos <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                        <div class="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1">
+                                            <div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Eldorado" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Eldorado</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Industrial" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Industrial</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Nacional" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Nacional</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Petrolância" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Petrolância</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Ressaca" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Ressaca</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Riacho" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Riacho</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Sede" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Sede</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Vargem das Flores" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Vargem das Flores</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="" class="chk-district-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Não Informado</span></label>
+                                        </div>
+                                    </details>
+                                    <details class="relative z-20 shrink-0">
+                                        <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Líderes <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                        <div class="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-lider-list-container"></div>
+                                    </details>
+                                    <details class="relative z-10 shrink-0">
+                                        <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Status <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                        <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1">
+                                            <div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="novo" class="chk-status-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Novo</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="investigacao" class="chk-status-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Em Investigação</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="concluido" class="chk-status-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Concluído</span></label>
+                                            <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="descartado" class="chk-status-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Descartado</span></label>
+                                        </div>
+                                    </details>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="exportToPDF('view-list', 'VigiCom_Monitoramento.pdf')" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 flex gap-2 items-center shrink-0 whitespace-nowrap">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i> PDF
+                                </button>
+                                <button onclick="exportRumorsCSV()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 flex gap-2 items-center shrink-0 whitespace-nowrap">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> CSV
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden print-break">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] border-b border-slate-100">
+                                    <tr>
+                                        <th class="px-8 py-6">Relato</th>
+                                        <th class="px-8 py-6">Território</th>
+                                        <th class="px-8 py-6">Data</th>
+                                        <th class="px-8 py-6">Status / Info</th>
+                                        <th class="px-8 py-6 text-right no-print">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rumors-table-body" class="divide-y divide-slate-50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista: Dashboards -->
+            <section id="view-dashboard" class="view-section animate-slide-up">
+                <div class="space-y-8">
+                    <div class="flex flex-row justify-between items-center gap-4 no-print w-full overflow-visible">
+                        <header class="shrink-0">
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Cenário Municipal</h2>
+                            <p id="dash-filter-label" class="text-emerald-500 font-bold text-sm hidden mt-2 whitespace-nowrap">Filtro Ativo: <span id="dash-active-cat"></span> <button onclick="clearDashFilter()" class="underline text-xs ml-2 text-slate-400 hover:text-red-500">Limpar</button></p>
+                        </header>
+                        <div class="flex flex-nowrap gap-2 justify-end items-center overflow-visible">
+                            <details class="relative z-50 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Anos <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-year-dash-container"></div>
+                            </details>
+                            <details class="relative z-40 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Semanas <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-week-dash-container"></div>
+                            </details>
+                            <details class="relative z-30 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Distritos <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1">
+                                    <div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Eldorado" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Eldorado</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Industrial" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Industrial</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Nacional" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Nacional</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Petrolância" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Petrolância</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Ressaca" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Ressaca</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Riacho" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Riacho</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Sede" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Sede</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Vargem das Flores" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Vargem das Flores</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="" class="chk-district-dash text-emerald-500 rounded focus:ring-emerald-500" onchange="updateStats()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Não Informado</span></label>
+                                </div>
+                            </details>
+                            <div class="flex gap-2">
+                                <button onclick="exportToPDF('view-dashboard', 'VigiCom_Dashboard.pdf')" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 flex gap-2 items-center shrink-0 whitespace-nowrap"><i data-lucide="file-text" class="w-4 h-4"></i> PDF</button>
+                                <button onclick="exportDashboardCSV()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 flex gap-2 items-center shrink-0 whitespace-nowrap"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> CSV</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div class="bg-white p-6 rounded-[2rem] border shadow-sm print-break"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Total</p><p id="dash-total" class="text-4xl font-black text-slate-900">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-emerald-400 shadow-sm print-break"><p class="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2">Novos</p><p id="dash-novos" class="text-4xl font-black text-emerald-500">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-amber-400 shadow-sm print-break"><p class="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-2">Em Investigação</p><p id="dash-analise" class="text-4xl font-black text-amber-500">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-teal-500 shadow-sm print-break"><p class="text-[9px] font-black text-teal-500 uppercase tracking-widest mb-2">Concluídos</p><p id="dash-concluido" class="text-4xl font-black text-teal-600">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-slate-400 shadow-sm print-break"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Descartados</p><p id="dash-descartado" class="text-4xl font-black text-slate-600">0</p></div>
+                    </div>
+
+                    <div class="w-full">
+                        <div class="bg-white p-8 rounded-[2.5rem] border shadow-sm print-break">
+                            <h3 class="font-black text-slate-800 mb-6 uppercase text-[10px] tracking-widest text-emerald-500">Relato por Categoria</h3>
+                            <div id="category-report" class="space-y-4"></div>
+                            <p class="text-[9px] text-slate-400 mt-4 italic no-print">* Clique em uma barra para filtrar os números superiores.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOVA Vista: Indicadores -->
+            <section id="view-indicadores" class="view-section animate-slide-up no-print">
+                <div class="space-y-8">
+                    <header class="flex justify-between items-end gap-4">
+                        <div>
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Indicadores de Desempenho</h2>
+                            <p class="text-slate-400 font-medium mt-1">Cálculo de métricas operacionais e cobertura territorial.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="exportToPDF('view-indicadores', 'VigiCom_Indicadores.pdf')" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 flex gap-2 items-center"><i data-lucide="file-text" class="w-4 h-4"></i> PDF</button>
+                            <button onclick="exportIndicadoresCSV()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 flex gap-2 items-center"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> CSV</button>
+                        </div>
+                    </header>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <!-- Indicador 1 -->
+                        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between print-break">
+                            <div>
+                                <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-2">01. Cobertura por Distrito</h3>
+                                <p class="text-[10px] text-slate-500 mb-6 h-8 leading-tight">Percentual de semanas com notificações (relatos ou relatos ausentes) realizadas no Distrito selecionado.</p>
+                                
+                                <div class="grid grid-cols-2 gap-2 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div class="col-span-2 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Distrito Avaliado</label>
+                                        <select id="ind1-dist" onchange="calcInd1()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-emerald-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-2 space-y-1 mt-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Ano</label>
+                                        <select id="ind1-year" onchange="calcInd1()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-emerald-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Inicial</label>
+                                        <select id="ind1-ws" onchange="calcInd1()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-emerald-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Final</label>
+                                        <select id="ind1-we" onchange="calcInd1()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-emerald-400 shadow-sm"></select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-auto border-t border-slate-100 pt-6 flex justify-between items-end">
+                                <div>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Resultado Final</p>
+                                    <p id="ind1-desc" class="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded">0 semanas c/ notificação / 0 avaliadas</p>
+                                </div>
+                                <p id="ind1-res" class="text-5xl font-black text-emerald-500 tracking-tighter">0%</p>
+                            </div>
+                        </div>
+
+                        <!-- Indicador 2 -->
+                        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between print-break">
+                            <div>
+                                <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-2">02. Participação do Líder</h3>
+                                <p class="text-[10px] text-slate-500 mb-6 h-8 leading-tight">Percentual de semanas em que o líder comunitário selecionado realizou notificações.</p>
+                                
+                                <div class="grid grid-cols-2 gap-2 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div class="col-span-2 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Líder (Usuário)</label>
+                                        <select id="ind2-user" onchange="calcInd2()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-purple-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-2 space-y-1 mt-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Ano</label>
+                                        <select id="ind2-year" onchange="calcInd2()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-purple-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Inicial</label>
+                                        <select id="ind2-ws" onchange="calcInd2()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-purple-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Final</label>
+                                        <select id="ind2-we" onchange="calcInd2()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-purple-400 shadow-sm"></select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-auto border-t border-slate-100 pt-6 flex justify-between items-end">
+                                <div>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Resultado Final</p>
+                                    <p id="ind2-desc" class="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded">0 semanas c/ notificação / 0 avaliadas</p>
+                                </div>
+                                <p id="ind2-res" class="text-5xl font-black text-purple-500 tracking-tighter">0%</p>
+                            </div>
+                        </div>
+
+                        <!-- Indicador 3 -->
+                        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between print-break">
+                            <div>
+                                <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-2">03. Positividade por Distrito</h3>
+                                <p class="text-[10px] text-slate-500 mb-6 h-8 leading-tight">Percentual de semanas com relatos registrados em relação às semanas avaliadas não-silenciosas (com relatos presentes ou ausentes).</p>
+                                
+                                <div class="grid grid-cols-2 gap-2 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div class="col-span-2 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Distrito Avaliado</label>
+                                        <select id="ind3-dist" onchange="calcInd3()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-amber-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-2 space-y-1 mt-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Ano</label>
+                                        <select id="ind3-year" onchange="calcInd3()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-amber-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Inicial</label>
+                                        <select id="ind3-ws" onchange="calcInd3()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-amber-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Final</label>
+                                        <select id="ind3-we" onchange="calcInd3()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-amber-400 shadow-sm"></select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-auto border-t border-slate-100 pt-6 flex justify-between items-end">
+                                <div>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Resultado Final</p>
+                                    <p id="ind3-desc" class="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded">0 semanas c/ relatos / 0 avaliadas</p>
+                                </div>
+                                <p id="ind3-res" class="text-5xl font-black text-amber-500 tracking-tighter">0%</p>
+                            </div>
+                        </div>
+
+                        <!-- Indicador 4 -->
+                        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between print-break">
+                            <div>
+                                <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-2">04. Tempo Médio de Resposta</h3>
+                                <p class="text-[10px] text-slate-500 mb-6 h-8 leading-tight">Média de dias desde a data de cadastro do relato até a data em que o status foi alterado para Concluído.</p>
+                                
+                                <div class="grid grid-cols-2 gap-2 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div class="col-span-2 space-y-1">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Ano</label>
+                                        <select id="ind4-year" onchange="calcInd4()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-blue-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1 mt-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Inicial</label>
+                                        <select id="ind4-ws" onchange="calcInd4()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-blue-400 shadow-sm"></select>
+                                    </div>
+                                    <div class="col-span-1 space-y-1 mt-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase ml-1">Semana Final</label>
+                                        <select id="ind4-we" onchange="calcInd4()" class="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl outline-none text-slate-700 font-semibold focus:ring-2 focus:ring-blue-400 shadow-sm"></select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-auto border-t border-slate-100 pt-6 flex justify-between items-end">
+                                <div>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Resultado Final</p>
+                                    <p id="ind4-desc" class="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded">Média de 0 relatos concluídos</p>
+                                </div>
+                                <div class="flex items-baseline gap-1">
+                                    <p id="ind4-res" class="text-5xl font-black text-blue-500 tracking-tighter">0</p>
+                                    <span class="text-xs font-bold text-slate-400">dias</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista: Mapa de Ocorrências (Apenas Gestor) -->
+            <section id="view-map" class="view-section animate-slide-up no-print">
+                <div class="space-y-4 h-full flex flex-col">
+                    <header class="flex justify-between items-end gap-4 flex-wrap">
+                        <div>
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Mapa de Ocorrências</h2>
+                            <p class="text-slate-400 font-medium mt-1">Mapeamento dos relatos registrados no território.</p>
+                        </div>
+                        <div class="flex gap-2 items-center flex-wrap">
+                            <details class="relative z-50 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Anos <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-year-map-container"></div>
+                            </details>
+                            <details class="relative z-40 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Semanas <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-week-map-container"></div>
+                            </details>
+                            <details class="relative z-30 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Distritos <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1">
+                                    <div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Eldorado" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Eldorado</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Industrial" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Industrial</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Nacional" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Nacional</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Petrolância" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Petrolância</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Ressaca" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Ressaca</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Riacho" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Riacho</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Sede" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Sede</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="Vargem das Flores" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Vargem das Flores</span></label>
+                                    <label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="" class="chk-district-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">Não Informado</span></label>
+                                </div>
+                            </details>
+                            <details class="relative z-20 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Categoria <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-cat-map-container"></div>
+                            </details>
+                            <details class="relative z-10 shrink-0">
+                                <summary class="px-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold cursor-pointer flex items-center gap-2 select-none hover:bg-slate-50 transition-colors whitespace-nowrap">Usuário <i data-lucide="chevron-down" class="w-3 h-3"></i></summary>
+                                <div class="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-100 shadow-xl rounded-xl p-2 max-h-56 overflow-y-auto flex flex-col gap-1" id="filter-user-map-container"></div>
+                            </details>
+                            <button onclick="renderMapMarkers()" class="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold hover:bg-emerald-100 flex gap-2 items-center transition-colors"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Atualizar Mapa</button>
+                        </div>
+                    </header>
+                    <div class="bg-white p-2 rounded-[2.5rem] border shadow-sm flex-1 min-h-[600px] relative">
+                        <div id="map-container" class="w-full h-full rounded-[2rem] overflow-hidden min-h-[600px] bg-slate-50 z-10"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista: Controle de Usuários -->
+            <section id="view-users" class="view-section animate-slide-up no-print">
+                <div class="space-y-8">
+                    <header class="flex justify-between items-end gap-4">
+                        <div>
+                            <h2 class="text-4xl font-black text-slate-900 tracking-tight">Controle de Usuários</h2>
+                            <p class="text-slate-400 font-medium mt-1">Gestão demográfica e acompanhamento de acessos (aprovação de novos cadastros).</p>
+                        </div>
+                        <button onclick="renderUserMapMarkers()" class="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 flex gap-2 items-center transition-colors hidden lg:flex"><i data-lucide="map" class="w-4 h-4"></i> Atualizar Mapa</button>
+                    </header>
+
+                    <!-- Dashboard de Usuários -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-6 rounded-[2rem] border shadow-sm"><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Total de Usuários</p><p id="u-dash-total" class="text-4xl font-black text-slate-900">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-emerald-400 shadow-sm"><p class="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2">Relatores Ativos</p><p id="u-dash-relator" class="text-4xl font-black text-emerald-500">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-amber-400 shadow-sm"><p class="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-2">Aguardando Aprovação</p><p id="u-dash-pendente" class="text-4xl font-black text-amber-500">0</p></div>
+                        <div class="bg-white p-6 rounded-[2rem] border-l-4 border-l-purple-400 shadow-sm"><p class="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-2">Distritos Cobertos</p><p id="u-dash-distritos" class="text-4xl font-black text-purple-500">0</p></div>
+                    </div>
+
+                    <!-- Mapa de Calor / Geolocalização dos Usuários -->
+                    <div class="bg-white p-2 rounded-[2.5rem] border shadow-sm mb-8 hidden lg:block relative">
+                        <div class="absolute top-6 left-6 z-20 bg-white/90 backdrop-blur-sm p-3 rounded-xl border border-slate-100 shadow-sm pointer-events-none">
+                            <h4 class="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-2">Legenda de Usuários</h4>
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-emerald-500 border border-white"></div><span class="text-[10px] font-bold text-slate-600">Aprovados</span></div>
+                                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-amber-500 border border-white"></div><span class="text-[10px] font-bold text-slate-600">Pendentes</span></div>
+                                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500 border border-white"></div><span class="text-[10px] font-bold text-slate-600">Reprovados</span></div>
+                            </div>
+                        </div>
+                        <div id="users-map-container" class="w-full h-[400px] rounded-[2rem] overflow-hidden bg-slate-50 z-10 relative"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-1 bg-white p-8 rounded-[2rem] border shadow-sm h-fit">
+                            <h3 class="text-lg font-bold text-slate-800 mb-6 flex gap-2"><i data-lucide="edit-2" class="w-5 h-5 text-blue-400"></i> Editar Acesso</h3>
+                            
+                            <div id="edit-user-placeholder" class="text-center py-10 text-slate-400 flex flex-col items-center justify-center">
+                                <i data-lucide="mouse-pointer-click" class="w-10 h-10 mb-3 opacity-50"></i>
+                                <p class="text-sm font-medium leading-relaxed">Selecione um usuário na tabela<br>ao lado para editar.</p>
+                            </div>
+
+                            <div id="edit-user-form-container" class="hidden">
+                                <form id="userForm" class="space-y-4">
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Nome Completo (Bloqueado)</label>
+                                        <input type="text" id="u-name" disabled class="w-full p-4 bg-slate-100 text-slate-400 rounded-xl outline-none cursor-not-allowed font-medium">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">E-mail</label>
+                                        <input type="email" id="u-email" required class="w-full p-4 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-blue-400">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Senha</label>
+                                        <input type="password" id="u-password" required class="w-full p-4 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="••••••••">
+                                    </div>
+
+                                    <!-- ENDEREÇO NO MODAL (BLOQUEADO) -->
+                                    <div class="border-t border-slate-100 pt-4 mt-2">
+                                        <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">Endereço Residencial (Bloqueado)</h4>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div class="col-span-1 md:col-span-2">
+                                                <input type="text" id="u-logradouro" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed" placeholder="Logradouro">
+                                            </div>
+                                            <div class="col-span-1">
+                                                <input type="text" id="u-numero" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed" placeholder="Número">
+                                            </div>
+                                            <div class="col-span-1">
+                                                <input type="text" id="u-bairro" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed" placeholder="Bairro">
+                                            </div>
+                                            <div class="col-span-1 md:col-span-2">
+                                                <input type="text" id="u-cep" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed" placeholder="CEP">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 mt-2">
+                                        <div class="col-span-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Nascimento (Bloqueado)</label>
+                                            <input type="date" id="u-dob" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed">
+                                        </div>
+                                        <div class="col-span-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Gênero (Bloqueado)</label>
+                                            <select id="u-gender" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed">
+                                                <option value="">Selecione...</option>
+                                                <option value="Cisgênero">Cisgênero</option>
+                                                <option value="Homem Trans">Homem Trans</option>
+                                                <option value="Mulher Trans">Mulher Trans</option>
+                                                <option value="Outro">Outro</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-span-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Raça/Cor (Bloqueado)</label>
+                                            <select id="u-race" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed">
+                                                <option value="">Selecione...</option>
+                                                <option value="Amarela">Amarela</option>
+                                                <option value="Branca">Branca</option>
+                                                <option value="Parda">Parda</option>
+                                                <option value="Preta">Preta</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-span-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Distrito (Bloqueado)</label>
+                                            <select id="u-district" disabled class="w-full p-3 bg-slate-100 rounded-xl outline-none text-xs text-slate-400 font-bold cursor-not-allowed">
+                                                <option value="">Selecione...</option>
+                                                <option value="Eldorado">Eldorado</option>
+                                                <option value="Industrial">Industrial</option>
+                                                <option value="Nacional">Nacional</option>
+                                                <option value="Petrolância">Petrolância</option>
+                                                <option value="Ressaca">Ressaca</option>
+                                                <option value="Riacho">Riacho</option>
+                                                <option value="Sede">Sede</option>
+                                                <option value="Vargem das Flores">Vargem das Flores</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-2 mt-4">
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">Perfil de Acesso</label>
+                                        <div class="flex flex-wrap gap-2">
+                                            <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer flex-1 hover:bg-slate-100 min-w-[120px]"><input type="checkbox" name="u-role-checkbox" value="relator" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500"> <span class="text-xs font-bold">Relator</span></label>
+                                            <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer flex-1 hover:bg-slate-100 min-w-[120px]"><input type="checkbox" name="u-role-checkbox" value="gestor" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500"> <span class="text-xs font-bold">Gestão</span></label>
+                                            <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer flex-1 hover:bg-slate-100 min-w-[120px]"><input type="checkbox" name="u-role-checkbox" value="observador" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500"> <span class="text-xs font-bold">Observador</span></label>
+                                        </div>
+                                    </div>
+
+                                    <div id="u-status-container" class="mt-4 pt-4 border-t border-slate-100">
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">Status de Acesso</label>
+                                        <select id="u-status" class="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 font-bold outline-none focus:ring-2 focus:ring-blue-400">
+                                            <option value="pending">Pendente (Aguardando)</option>
+                                            <option value="approved">Aprovado</option>
+                                            <option value="rejected">Reprovado</option>
+                                        </select>
+                                    </div>
+
+                                    <button type="submit" id="btn-save-user" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-blue-500 transition-all mt-4">Atualizar Usuário</button>
+                                    <button type="button" onclick="cancelEditUser()" class="w-full bg-red-50 text-red-500 py-3 rounded-xl font-bold hover:bg-red-100 transition-all mt-2">Cancelar Edição</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-2 bg-white rounded-[2rem] border shadow-sm overflow-hidden flex flex-col">
+                            <div class="flex flex-wrap gap-2 p-4 border-b border-slate-50 bg-slate-50/50">
+                                <select id="filter-u-status" onchange="renderUsers()" class="px-4 py-3 bg-white rounded-xl border border-slate-200 text-xs font-bold outline-none flex-1 min-w-[140px]">
+                                    <option value="todos">Todos os Status</option>
+                                    <option value="pending">Pendentes</option>
+                                    <option value="approved">Aprovados</option>
+                                    <option value="rejected">Reprovados</option>
+                                </select>
+                                <select id="filter-u-role" onchange="renderUsers()" class="px-4 py-3 bg-white rounded-xl border border-slate-200 text-xs font-bold outline-none flex-1 min-w-[140px]">
+                                    <option value="todos">Todos os Perfis</option>
+                                    <option value="relator">Relatores</option>
+                                    <option value="gestor">Gestores</option>
+                                    <option value="observador">Observadores</option>
+                                </select>
+                                <select id="filter-u-district" onchange="renderUsers()" class="px-4 py-3 bg-white rounded-xl border border-slate-200 text-xs font-bold outline-none flex-1 min-w-[140px]">
+                                    <option value="todos">Todos os Distritos</option>
+                                    <option value="Eldorado">Eldorado</option>
+                                    <option value="Industrial">Industrial</option>
+                                    <option value="Nacional">Nacional</option>
+                                    <option value="Petrolância">Petrolância</option>
+                                    <option value="Ressaca">Ressaca</option>
+                                    <option value="Riacho">Riacho</option>
+                                    <option value="Sede">Sede</option>
+                                    <option value="Vargem das Flores">Vargem das Flores</option>
+                                </select>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left min-w-[600px]">
+                                    <thead class="bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] border-b">
+                                        <tr>
+                                            <th class="px-6 py-5 cursor-pointer hover:bg-slate-200 transition-colors select-none group" onclick="sortUsers('name')">
+                                                <div class="flex items-center gap-2">Usuário <i data-lucide="arrow-up-down" class="w-3 h-3 opacity-50 group-hover:opacity-100"></i></div>
+                                            </th>
+                                            <th class="px-6 py-5 cursor-pointer hover:bg-slate-200 transition-colors select-none group" onclick="sortUsers('district')">
+                                                <div class="flex items-center gap-2">Distrito / Demografia <i data-lucide="arrow-up-down" class="w-3 h-3 opacity-50 group-hover:opacity-100"></i></div>
+                                            </th>
+                                            <th class="px-6 py-5 cursor-pointer hover:bg-slate-200 transition-colors select-none group" onclick="sortUsers('roles')">
+                                                <div class="flex items-center gap-2">Acesso Solicitado <i data-lucide="arrow-up-down" class="w-3 h-3 opacity-50 group-hover:opacity-100"></i></div>
+                                            </th>
+                                            <th class="px-6 py-5 cursor-pointer hover:bg-slate-200 transition-colors select-none group" onclick="sortUsers('status')">
+                                                <div class="flex items-center gap-2">Status <i data-lucide="arrow-up-down" class="w-3 h-3 opacity-50 group-hover:opacity-100"></i></div>
+                                            </th>
+                                            <th class="px-6 py-5 text-right">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body" class="divide-y divide-slate-50 text-sm"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista: Meu Perfil -->
+            <section id="view-profile" class="view-section animate-slide-up no-print">
+                <div class="max-w-3xl mx-auto bg-white p-12 rounded-[3rem] shadow-sm border border-slate-50">
+                    <header class="mb-10 text-center">
+                        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mx-auto mb-4"><i data-lucide="user" class="w-8 h-8"></i></div>
+                        <h2 class="text-3xl font-black text-slate-900 tracking-tight">Meu Perfil</h2>
+                        <p class="text-slate-400 text-sm mt-2">Atualize seus dados cadastrais e preferências de acesso.</p>
+                    </header>
+                    <form id="profileForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Nome Completo</label>
+                                <input type="text" id="p-name" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">E-mail</label>
+                                <input type="email" id="p-email" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Senha</label>
+                                <input type="password" id="p-password" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold" placeholder="••••••••">
+                            </div>
+                            
+                            <!-- ENDEREÇO MEU PERFIL -->
+                            <div class="col-span-1 md:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                                <h3 class="text-xs font-bold text-slate-800 mb-3 uppercase tracking-wider">Endereço Residencial</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div class="col-span-1 md:col-span-1">
+                                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">CEP</label>
+                                        <input type="text" id="p-cep" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold" placeholder="00000-000">
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Logradouro</label>
+                                        <input type="text" id="p-logradouro" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold">
+                                    </div>
+                                    <div class="col-span-1 md:col-span-2">
+                                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Número</label>
+                                        <div class="flex gap-2 items-center mt-1">
+                                            <input type="text" id="p-numero" required class="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold">
+                                            <label class="flex items-center gap-2 px-3 py-3 bg-slate-50 border border-slate-100 rounded-xl cursor-pointer whitespace-nowrap">
+                                                <input type="checkbox" id="p-sn" onchange="toggleSN('p-sn', 'p-numero')" class="w-4 h-4 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500">
+                                                <span class="text-xs font-bold text-slate-500">S/N</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-span-1 md:col-span-2">
+                                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Bairro</label>
+                                        <input type="text" id="p-bairro" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-span-1 border-t border-slate-100 pt-4 mt-2">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Nascimento</label>
+                                <input type="date" id="p-dob" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold text-slate-600">
+                            </div>
+                            <div class="col-span-1 border-t border-slate-100 pt-4 mt-2">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Gênero</label>
+                                <select id="p-gender" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold text-slate-600">
+                                    <option value="">Selecione...</option>
+                                    <option value="Cisgênero">Cisgênero</option>
+                                    <option value="Homem Trans">Homem Trans</option>
+                                    <option value="Mulher Trans">Mulher Trans</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div class="col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Raça/Cor</label>
+                                <select id="p-race" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold text-slate-600">
+                                    <option value="">Selecione...</option>
+                                    <option value="Amarela">Amarela</option>
+                                    <option value="Branca">Branca</option>
+                                    <option value="Parda">Parda</option>
+                                    <option value="Preta">Preta</option>
+                                </select>
+                            </div>
+                            <div class="col-span-1">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Distrito Atuação</label>
+                                <select id="p-district" required class="w-full px-4 py-3 mt-1 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 font-semibold text-slate-600">
+                                    <option value="">Selecione...</option>
+                                    <option value="Eldorado">Eldorado</option>
+                                    <option value="Industrial">Industrial</option>
+                                    <option value="Nacional">Nacional</option>
+                                    <option value="Petrolância">Petrolância</option>
+                                    <option value="Ressaca">Ressaca</option>
+                                    <option value="Riacho">Riacho</option>
+                                    <option value="Sede">Sede</option>
+                                    <option value="Vargem das Flores">Vargem das Flores</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-span-1 md:col-span-2 mt-4 pt-4 border-t border-slate-100">
+                                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1 block mb-2">Permissões de Acesso</label>
+                                <div class="flex flex-wrap gap-4">
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer border border-slate-100 hover:bg-slate-100 flex-1 min-w-[120px]"><input type="checkbox" name="p-role-checkbox" value="relator" class="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"> <span class="text-xs font-bold">Relator</span></label>
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer border border-slate-100 hover:bg-slate-100 flex-1 min-w-[120px]"><input type="checkbox" name="p-role-checkbox" value="gestor" class="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"> <span class="text-xs font-bold">Gestão</span></label>
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer border border-slate-100 hover:bg-slate-100 flex-1 min-w-[120px]"><input type="checkbox" name="p-role-checkbox" value="observador" class="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"> <span class="text-xs font-bold">Observador</span></label>
+                                </div>
+                                <p class="text-[10px] text-slate-400 mt-2 ml-1">* Alterações nos níveis de acesso poderão ser avaliadas pela equipe responsável.</p>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 flex flex-col gap-3">
+                            <button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-emerald-500 shadow-lg transition-all">Salvar Alterações</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="mt-auto border-t border-slate-200/50 py-8 flex justify-center items-center gap-8 bg-white/50 no-print">
+            <img src="./logo-prefeitura.png" alt="Prefeitura de Contagem" class="h-10 logo-pb" onerror="this.style.display='none'">
+        </footer>
+    </div>
+
+    <!-- Modal de Triagem (Gestor) -->
+    <div id="evalModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 p-4 items-center justify-center no-print">
+        <div class="bg-white w-full max-w-6xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+            <header class="px-10 py-8 border-b flex justify-between items-center bg-slate-50/50 shrink-0">
+                <h2 id="modal-title-text" class="text-xl font-black text-slate-800">Detalhes do Registro</h2>
+                <button onclick="closeModal()" class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-300 hover:text-red-500 shadow-sm"><i data-lucide="x"></i></button>
+            </header>
+            
+            <div class="p-10 overflow-y-auto" id="modal-content"></div>
+
+            <footer id="modal-actions" class="only-gestor px-10 py-6 border-t bg-slate-50/50 shrink-0">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                    <div class="space-y-1.5 col-span-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">1. Status</label>
+                        <select id="m-status" class="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs shadow-sm outline-none">
+                            <option value="novo">Novo</option>
+                            <option value="investigacao">Em Investigação</option>
+                            <option value="concluido">Concluído</option>
+                            <option value="descartado">Descartado</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5 col-span-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Classificação</label>
+                        <select id="m-classification" class="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs shadow-sm outline-none">
+                            <option value="">A Definir</option>
+                            <option value="Rumor">Rumor</option>
+                            <option value="Evento">Evento</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5 col-span-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Parecer Técnico</label>
+                        <textarea id="m-note" rows="2" class="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-medium resize-none shadow-sm outline-none" placeholder="Medidas..."></textarea>
+                    </div>
+                    <div class="flex items-end h-full pt-5 col-span-1">
+                        <button id="btnSaveEval" class="w-full bg-slate-900 text-white h-[42px] rounded-xl font-black uppercase text-[10px] shadow-md hover:bg-emerald-500 disabled:opacity-50">Atualizar</button>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // BANCO DE DADOS EM MEMÓRIA PERSISTENTE (LOCALSTORAGE)
+        // =========================================================================
+        
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+        
+        const defaultUsers = [
+            { id: 'admin-1', name: 'Gestor Administrativo', email: 'admin@admin.com', password: 'admin123', roles: ['gestor', 'relator'], status: 'approved', district: 'Sede', gender: 'Cisgênero', race: 'Branca', cep: '32041-000', logradouro: 'Av. João César de Oliveira', numero: '123', bairro: 'Eldorado', lat: -19.9321, lng: -44.0539 },
+            { id: 'relator-1', name: 'Relator Comunitário', email: 'teste@teste.com', password: '123teste', roles: ['relator'], status: 'approved', district: 'Eldorado', gender: 'Cisgênero', race: 'Parda', cep: '32210-000', logradouro: 'Rua Rio Comprido', numero: '456', bairro: 'Riacho', lat: -19.9450, lng: -44.0450 },
+            { id: 'obs-1', name: 'Observador Externo', email: 'obs@teste.com', password: '123', roles: ['observador'], status: 'approved', district: 'Sede', gender: 'Outro', race: 'Não Informada', cep: '', logradouro: '', numero: '', bairro: '', lat: null, lng: null }
+        ];
+
+        const defaultRumors = [
+            { id: 'rumor-1', title: 'Foco de Dengue em Lote Vago', category: 'Condição Ambiental Suspeita', involvedCount: 'Mais de 5', affected: ['Ambiente', 'Pessoas'], street: 'Rua das Oliveiras, 120', neighborhood: 'Eldorado', district: 'Eldorado', city: 'Contagem', description: 'Lote abandonado com muito lixo e água parada.', reporterName: 'Relator Comunitário', reporterId: 'relator-1', communityContactName: 'Dona Maria', contact: '31 99999-9999', status: 'novo', classification: '', createdAt: Date.now() - (86400000 * 2), history: [{ status: 'novo', note: 'Relato cadastrado pelo relator local.', timestamp: Date.now() - (86400000 * 2) }], lat: -19.9300, lng: -44.0500 },
+            { id: 'rumor-2', title: 'Surtos de Virosa na Escola', category: 'Doenças Transmissíveis', involvedCount: 'Mais de 5', affected: ['Pessoas'], street: 'Av. João César de Oliveira, 2500', neighborhood: 'Glória', district: 'Eldorado', city: 'Contagem', description: 'Várias crianças da mesma turma apresentando febre e vômito.', reporterName: 'Gestor Administrativo', reporterId: 'admin-1', communityContactName: 'Diretora Ana', contact: '31 3333-3333', status: 'investigacao', classification: 'Evento', createdAt: Date.now() - (86400000 * 5), history: [ { status: 'novo', note: 'Relato cadastrado.', timestamp: Date.now() - (86400000 * 5) }, { status: 'investigacao', note: 'Equipe acionada.', timestamp: Date.now() - (86400000 * 4) } ], lat: -19.9350, lng: -44.0600 }
+        ];
+
+        let allUsers = JSON.parse(localStorage.getItem('vigi_users')) || defaultUsers;
+        let allRumors = JSON.parse(localStorage.getItem('vigi_rumors')) || defaultRumors;
+        let allNegatives = JSON.parse(localStorage.getItem('vigi_negatives')) || [];
+
+        function saveData() {
+            localStorage.setItem('vigi_users', JSON.stringify(allUsers));
+            localStorage.setItem('vigi_rumors', JSON.stringify(allRumors));
+            localStorage.setItem('vigi_negatives', JSON.stringify(allNegatives));
+        }
+
+        let activeRumorId = null;
+        let currentRole = 'relator'; 
+        let currentUserEmail = '';
+        let currentDocUserId = null;
+
+        let activeDashCategoryFilter = null;
+        let editingUserId = null;
+
+        let mapInstance = null;
+        let mapLayerGroup = null;
+
+        let userMapInstance = null;
+        let userMapLayerGroup = null;
+
+        let userSortCol = 'name';
+        let userSortAsc = true;
+
+        window.onload = () => { 
+            lucide.createIcons();
+            document.addEventListener('click', (e) => {
+                document.querySelectorAll('details').forEach(details => {
+                    if (details.open && !details.contains(e.target)) details.removeAttribute('open');
+                });
+            });
+            document.getElementById('m-status').addEventListener('change', checkModalValid);
+            document.getElementById('m-classification').addEventListener('change', checkModalValid);
+            document.getElementById('m-note').addEventListener('input', checkModalValid);
+        };
+
+        function toggleSN(checkboxId, inputId) {
+            const chk = document.getElementById(checkboxId);
+            const input = document.getElementById(inputId);
+            if (chk.checked) {
+                input.value = ''; input.disabled = true; input.required = false;
+                input.classList.add('bg-slate-200', 'cursor-not-allowed'); input.classList.remove('bg-slate-50');
+            } else {
+                input.disabled = false; input.required = true;
+                input.classList.remove('bg-slate-200', 'cursor-not-allowed'); input.classList.add('bg-slate-50');
+            }
+        }
+
+        function checkModalValid() {
+            const note = document.getElementById('m-note').value.trim();
+            document.getElementById('btnSaveEval').disabled = note.length < 3;
+        }
+
+        function triggerDataUpdate() {
+            saveData(); 
+
+            populateYearWeekFilters();
+            populateMapFilters();
+            populateIndicatorDropdowns(); 
+
+            renderRumors(); 
+            updateStats(); 
+            updateAllIndicators(); 
+
+            if (activeRumorId) refreshModal();
+
+            renderUsers(); 
+            updateUserStats();
+            if (document.getElementById('view-profile').classList.contains('active')) loadProfileData();
+
+            populateNegativeFilters();
+            renderNegatives();
+
+            if (typeof renderMapMarkers === 'function') renderMapMarkers();
+            if (typeof renderUserMapMarkers === 'function' && document.getElementById('view-users').classList.contains('active')) {
+                renderUserMapMarkers();
+            }
+        }
+
+        // --- SISTEMA DE EXPORTAÇÃO CSV ---
+        function convertToCSV(objArray) {
+            const array = typeof objArray != 'object' ? JSON.parse(objArray) : objArray;
+            let str = '';
+            
+            let row = '';
+            for (let index in array[0]) { row += '"' + index.replace(/"/g, '""') + '",'; }
+            row = row.slice(0, -1);
+            str += row + '\r\n';
+            
+            for (let i = 0; i < array.length; i++) {
+                let line = '';
+                for (let index in array[i]) {
+                    let val = array[i][index] === null || array[i][index] === undefined ? '' : array[i][index].toString();
+                    line += '"' + val.replace(/"/g, '""') + '",';
+                }
+                line = line.slice(0, -1);
+                str += line + '\r\n';
+            }
+            return str;
+        }
+
+        function downloadCSV(csvStr, filename) {
+            const blob = new Blob(["\ufeff" + csvStr], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Sucesso", "O download do arquivo CSV foi concluído.", "check-circle");
+        }
+
+        function exportNegativesCSV() {
+            const list = getFilteredNegativesList().map(n => ({
+                "Semana Epidemiológica": n.week,
+                "Relator": n.reporterName || 'N/A',
+                "Email": n.reporterEmail || 'N/A',
+                "Território": n.neighborhood || 'N/A',
+                "Data de Registro": new Date(n.timestamp).toLocaleString('pt-BR')
+            }));
+            if(list.length === 0) return showToast("Aviso", "Não há dados para exportar.", "info");
+            downloadCSV(convertToCSV(list), "VigiCom_Relatos_Ausentes.csv");
+        }
+
+        function exportRumorsCSV() {
+            const list = getFilteredRumorsList().map(r => ({
+                "Título": r.title,
+                "Categoria": r.category,
+                "Envolvidos": r.involvedCount,
+                "Afetados": (r.affected || []).join(', '),
+                "Distrito": r.district || '',
+                "Bairro": r.neighborhood,
+                "Logradouro": r.street,
+                "Cidade": r.city,
+                "Data de Registro": new Date(r.createdAt).toLocaleString('pt-BR'),
+                "Status": r.status,
+                "Classificação": r.classification || '',
+                "Relator/Líder": r.reporterName,
+                "Contato Local": r.communityContactName || r.contactName || '',
+                "Telefone Contato": r.contact || ''
+            }));
+            if(list.length === 0) return showToast("Aviso", "Não há dados para exportar.", "info");
+            downloadCSV(convertToCSV(list), "VigiCom_Monitoramento.csv");
+        }
+
+        function exportDashboardCSV() {
+            let csvStr = "Metrica,Quantidade\r\n";
+            csvStr += `"Total de Relatos","${document.getElementById('dash-total').innerText}"\r\n`;
+            csvStr += `"Novos","${document.getElementById('dash-novos').innerText}"\r\n`;
+            csvStr += `"Em Investigacao","${document.getElementById('dash-analise').innerText}"\r\n`;
+            csvStr += `"Concluidos","${document.getElementById('dash-concluido').innerText}"\r\n`;
+            csvStr += `"Descartados","${document.getElementById('dash-descartado').innerText}"\r\n\r\n`;
+
+            csvStr += "Relato por Categoria,Quantidade\r\n";
+            const catEls = document.querySelectorAll('#category-report .group');
+            catEls.forEach(el => {
+                const spans = el.querySelectorAll('span');
+                if(spans.length >= 2) {
+                    csvStr += `"${spans[0].innerText.replace(/"/g, '""')}","${spans[1].innerText.replace(/"/g, '""')}"\r\n`;
+                }
+            });
+
+            downloadCSV(csvStr, "VigiCom_Dashboard.csv");
+        }
+
+        function exportIndicadoresCSV() {
+            let csvStr = "Indicador,Descricao,Resultado\r\n";
+            
+            const i1Desc = document.getElementById('ind1-desc').innerText;
+            const i1Res = document.getElementById('ind1-res').innerText;
+            csvStr += `"01. Cobertura por Distrito","${i1Desc.replace(/"/g, '""')}","${i1Res.replace(/"/g, '""')}"\r\n`;
+
+            const i2Desc = document.getElementById('ind2-desc').innerText;
+            const i2Res = document.getElementById('ind2-res').innerText;
+            csvStr += `"02. Participacao do Lider","${i2Desc.replace(/"/g, '""')}","${i2Res.replace(/"/g, '""')}"\r\n`;
+
+            const i3Desc = document.getElementById('ind3-desc').innerText;
+            const i3Res = document.getElementById('ind3-res').innerText;
+            csvStr += `"03. Positividade por Distrito","${i3Desc.replace(/"/g, '""')}","${i3Res.replace(/"/g, '""')}"\r\n`;
+
+            const i4Desc = document.getElementById('ind4-desc').innerText;
+            const i4Res = document.getElementById('ind4-res').innerText;
+            csvStr += `"04. Tempo Medio de Resposta (Dias)","${i4Desc.replace(/"/g, '""')}","${i4Res.replace(/"/g, '""')}"\r\n`;
+
+            downloadCSV(csvStr, "VigiCom_Indicadores.csv");
+        }
+
+        // --- SISTEMA DE LOGIN E CADASTRO ---
+        function toggleAuthMode() {
+            const loginBox = document.getElementById('login-box');
+            const regBox = document.getElementById('register-box');
+            if (loginBox.classList.contains('hidden')) {
+                loginBox.classList.remove('hidden'); regBox.classList.add('hidden');
+            } else {
+                loginBox.classList.add('hidden'); regBox.classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('registerSelfForm').onsubmit = (e) => {
+            e.preventDefault();
+            const roles = [];
+            if(document.getElementById('reg-role-relator').checked) roles.push('relator');
+            if(document.getElementById('reg-role-gestor').checked) roles.push('gestor');
+            if(document.getElementById('reg-role-observador').checked) roles.push('observador');
+
+            if(roles.length === 0) { showToast("Atenção", "Selecione o perfil de acesso desejado.", "alert-triangle"); return; }
+
+            const email = document.getElementById('reg-email').value;
+            if(allUsers.find(u => u.email === email)) { showToast("Erro", "Este e-mail já está cadastrado no sistema.", "x-circle"); return; }
+
+            const snChecked = document.getElementById('reg-sn').checked;
+            const logradouro = document.getElementById('reg-logradouro').value;
+            const numero = snChecked ? 'S/N' : document.getElementById('reg-numero').value;
+            const bairro = document.getElementById('reg-bairro').value;
+            const cep = document.getElementById('reg-cep').value;
+
+            const newUser = {
+                id: generateId(),
+                name: document.getElementById('reg-name').value, email: email,
+                password: document.getElementById('reg-password').value, dob: document.getElementById('reg-dob').value,
+                gender: document.getElementById('reg-gender').value, race: document.getElementById('reg-race').value,
+                district: document.getElementById('reg-district').value, roles: roles, status: 'pending', createdAt: Date.now(),
+                cep: cep, logradouro: logradouro, numero: numero, bairro: bairro, lat: null, lng: null
+            };
+
+            allUsers.push(newUser);
+            triggerDataUpdate();
+
+            const addressQuery = `${logradouro}${numero !== 'S/N' ? ', ' + numero : ''}`;
+            geocodeAddress(addressQuery, bairro, 'Contagem').then(coords => {
+                if(coords) {
+                    const u = allUsers.find(x => x.id === newUser.id);
+                    if(u) { u.lat = coords.lat; u.lng = coords.lng; triggerDataUpdate(); }
+                }
+            });
+
+            showToast("Sucesso", "Solicitação enviada! Aguarde a aprovação da Gestão.", "check-circle");
+            document.getElementById('registerSelfForm').reset();
+            toggleAuthMode();
+        }
+
+        document.getElementById('loginForm').onsubmit = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('l-email').value;
+            const pass = document.getElementById('l-password').value;
+            const role = document.getElementById('l-role').value;
+            
+            const userFound = allUsers.find(d => d.email === email && d.password === pass);
+            
+            if (userFound) {
+                if (userFound.status === 'pending') { showError('Seu cadastro está aguardando aprovação da Gestão.'); return; }
+                if (userFound.status === 'rejected') { showError('Seu acesso foi reprovado pela Gestão.'); return; }
+
+                if ((userFound.roles || []).includes(role)) {
+                    proceedLogin(role, email, userFound.id, userFound.name);
+                } else {
+                    showError('Você não tem permissão para este Perfil de Acesso.');
+                }
+            } else { showError('Acesso negado ou incorreto.'); }
+        };
+
+        function proceedLogin(role, email, docId, fullName) {
+            currentRole = role; currentUserEmail = email; currentDocUserId = docId;
+            const firstName = fullName ? fullName.trim().split(' ')[0] : 'Perfil';
+            const navNameEl = document.getElementById('navbar-user-name');
+            if (navNameEl) navNameEl.innerText = firstName;
+
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            document.getElementById('main-app').classList.add('logged-in');
+            
+            document.body.classList.remove('is-gestor', 'is-relator', 'is-observador');
+            document.body.classList.add(`is-${role}`);
+            
+            let roleText = "Vigilância Comunitária";
+            if (role === 'gestor') roleText = "Gestão CIEVS";
+            if (role === 'observador') roleText = "Observador";
+
+            document.getElementById('role-tag').innerText = roleText;
+            lucide.createIcons();
+            
+            triggerDataUpdate();
+            
+            if (currentRole === 'gestor') {
+                const n = allRumors.filter(r => r.status === 'novo').length;
+                if (n > 0) setTimeout(() => showToast("Notificações Pendentes", `Existem ${n} novos relatos aguardando sua triagem.`, "bell"), 1000);
+            }
+        }
+
+        function showError(msg) {
+            const c = document.getElementById('login-error-container');
+            c.innerHTML = `<div class="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-xl text-center">${msg}</div>`;
+            setTimeout(() => c.innerHTML = '', 4000);
+        }
+
+        function handleLogout() { window.location.reload(); }
+        
+        function toggleAffectedOther() {
+            const chk = document.getElementById('chk-affected-other');
+            const txt = document.getElementById('f-affected-other-text');
+            if (chk.checked) { txt.classList.remove('hidden'); txt.required = true; } 
+            else { txt.classList.add('hidden'); txt.required = false; txt.value = ''; }
+        }
+
+        function showToast(title, desc, iconName) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = "glass p-5 rounded-2xl shadow-xl flex gap-4 pointer-events-auto w-[320px] animate-slide-up relative overflow-hidden bg-white/90";
+            toast.innerHTML = `
+                <div class="w-10 h-10 bg-emerald-400 rounded-xl flex items-center justify-center text-white flex-shrink-0"><i data-lucide="${iconName || 'info'}" class="w-5 h-5"></i></div>
+                <div><p class="text-[10px] font-black uppercase text-emerald-500 mb-1">Aviso</p><p class="text-sm font-bold text-slate-800 leading-tight">${title}</p><p class="text-[10px] text-slate-500 mt-1">${desc}</p></div>
+                <div class="absolute right-0 top-0 bottom-0 w-1 bg-emerald-400"></div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.remove(), 7000);
+        }
+
+        // --- Lógica de Ano e Semana Epidemiológica ---
+        function getEpiInfo(timestamp) {
+            const date = new Date(timestamp);
+            date.setHours(0, 0, 0, 0);
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+            const week1 = new Date(date.getFullYear(), 0, 4);
+            const week = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+            return { year: date.getFullYear().toString(), week: week.toString() };
+        }
+
+        function populateYearWeekFilters() {
+            const years = new Set();
+            const weeks = new Set();
+            
+            allRumors.forEach(r => {
+                const epi = getEpiInfo(r.createdAt);
+                years.add(epi.year); weeks.add(epi.week);
+            });
+            
+            const sortedYears = Array.from(years).sort().reverse();
+            const sortedWeeks = Array.from(weeks).sort((a,b) => parseInt(a) - parseInt(b));
+            
+            function renderCheckboxGroup(containerId, items, className, onChangeFn, labelPrefix = "") {
+                const container = document.getElementById(containerId);
+                if(!container) return;
+                const existingValues = Array.from(container.querySelectorAll('input[type="checkbox"]')).map(cb => cb.value);
+                const existingChecked = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+                const isFirstRender = container.innerHTML.trim() === '';
+
+                let html = `<div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>`;
+                html += items.map(item => {
+                    const isChecked = isFirstRender ? true : (existingChecked.includes(item) || !existingValues.includes(item));
+                    return `<label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                        <input type="checkbox" value="${item}" class="${className} text-emerald-500 rounded focus:ring-emerald-500" onchange="${onChangeFn}" ${isChecked ? 'checked' : ''}>
+                        <span class="text-xs font-bold text-slate-700">${labelPrefix}${item}</span>
+                    </label>`;
+                }).join('');
+                container.innerHTML = html;
+            }
+
+            renderCheckboxGroup('filter-year-list-container', sortedYears, 'chk-year-list', 'renderRumors()');
+            renderCheckboxGroup('filter-week-list-container', sortedWeeks, 'chk-week-list', 'renderRumors()', 'Semana ');
+            
+            // População para Filtro de Líderes na Listagem de Relatos
+            const leaderMapList = {};
+            allRumors.forEach(r => { 
+                const rId = r.reporterId || 'sem-id';
+                leaderMapList[rId] = r.reporterName || 'Desconhecido'; 
+            });
+            const leaderEntriesList = Object.entries(leaderMapList).sort((a,b) => a[1].localeCompare(b[1]));
+            
+            const leaderContainerList = document.getElementById('filter-lider-list-container');
+            if (leaderContainerList) {
+                const existingValues = Array.from(leaderContainerList.querySelectorAll('input[type="checkbox"]')).map(cb => cb.value);
+                const existingChecked = Array.from(leaderContainerList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+                const isFirstRender = leaderContainerList.innerHTML.trim() === '';
+                
+                let htmlList = `<div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>`;
+                htmlList += leaderEntriesList.map(([id, name]) => {
+                    const isChecked = isFirstRender ? true : (existingChecked.includes(id) || !existingValues.includes(id));
+                    return `<label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                        <input type="checkbox" value="${id}" class="chk-lider-list text-emerald-500 rounded focus:ring-emerald-500" onchange="renderRumors()" ${isChecked ? 'checked' : ''}>
+                        <span class="text-xs font-bold text-slate-700 whitespace-nowrap">${name}</span>
+                    </label>`;
+                }).join('');
+                leaderContainerList.innerHTML = htmlList;
+            }
+            
+            renderCheckboxGroup('filter-year-dash-container', sortedYears, 'chk-year-dash', 'updateStats()');
+            renderCheckboxGroup('filter-week-dash-container', sortedWeeks, 'chk-week-dash', 'updateStats()', 'Semana ');
+            
+            renderCheckboxGroup('filter-year-map-container', sortedYears, 'chk-year-map', 'renderMapMarkers()');
+            renderCheckboxGroup('filter-week-map-container', sortedWeeks, 'chk-week-map', 'renderMapMarkers()', 'Semana ');
+        }
+
+        // =========================================================================
+        // SISTEMA DE CÁLCULO DOS INDICADORES
+        // =========================================================================
+        
+        function populateIndicatorDropdowns() {
+            const years = new Set([new Date().getFullYear().toString()]);
+            allRumors.forEach(r => years.add(getEpiInfo(r.createdAt).year));
+            allNegatives.forEach(n => years.add(getEpiInfo(n.timestamp).year));
+            const sortedYears = Array.from(years).sort().reverse();
+            
+            const yearOptions = sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
+            
+            let weekOptions = '';
+            for(let i=1; i<=53; i++) { weekOptions += `<option value="${i}">Semana ${i}</option>`; }
+
+            const distritos = ['Eldorado', 'Industrial', 'Nacional', 'Petrolância', 'Ressaca', 'Riacho', 'Sede', 'Vargem das Flores'];
+            const distOptions = `<option value="">Selecione o Distrito...</option>` + distritos.map(d => `<option value="${d}">${d}</option>`).join('');
+
+            const relatores = allUsers.filter(u => u.status === 'approved' && (u.roles||[]).includes('relator'));
+            const userOptions = `<option value="">Selecione o Líder...</option>` + relatores.map(u => `<option value="${u.id}">${u.name} (${u.district || 'Sem Distrito'})</option>`).join('');
+
+            const configIds = [
+                { id: 'ind1', dist: true, user: false },
+                { id: 'ind2', dist: false, user: true },
+                { id: 'ind3', dist: true, user: false },
+                { id: 'ind4', dist: false, user: false }
+            ];
+
+            configIds.forEach(cfg => {
+                const elY = document.getElementById(`${cfg.id}-year`);
+                const elWs = document.getElementById(`${cfg.id}-ws`);
+                const elWe = document.getElementById(`${cfg.id}-we`);
+                
+                if(elY && elY.options.length === 0) elY.innerHTML = yearOptions;
+                if(elWs && elWs.options.length === 0) { elWs.innerHTML = weekOptions; elWs.value = "1"; }
+                if(elWe && elWe.options.length === 0) { elWe.innerHTML = weekOptions; elWe.value = "53"; }
+
+                if(cfg.dist) {
+                    const elD = document.getElementById(`${cfg.id}-dist`);
+                    if(elD && elD.options.length === 0) elD.innerHTML = distOptions;
+                }
+                if(cfg.user) {
+                    const elU = document.getElementById(`${cfg.id}-user`);
+                    if(elU) elU.innerHTML = userOptions;
+                }
+            });
+        }
+
+        function getSelectedWeeksArray(year, start, end) {
+            let y = parseInt(year); let s = parseInt(start); let e = parseInt(end);
+            if(s > e) return []; 
+            let arr = [];
+            for(let i=s; i<=e; i++) { arr.push({ year: y.toString(), week: i.toString() }); }
+            return arr;
+        }
+
+        function updateAllIndicators() {
+            calcInd1(); calcInd2(); calcInd3(); calcInd4();
+        }
+
+        // Ind 1: % de semanas com notificações por Distrito
+        function calcInd1() {
+            const y = document.getElementById('ind1-year').value;
+            const ws = document.getElementById('ind1-ws').value;
+            const we = document.getElementById('ind1-we').value;
+            const dist = document.getElementById('ind1-dist').value;
+
+            const weeks = getSelectedWeeksArray(y, ws, we);
+            if(weeks.length === 0 || !dist) { 
+                document.getElementById('ind1-res').innerText = '0%'; 
+                document.getElementById('ind1-desc').innerText = `Selecione um distrito.`;
+                return; 
+            }
+
+            let count = 0;
+            weeks.forEach(w => {
+                let hasR = allRumors.some(r => {
+                    let e = getEpiInfo(r.createdAt);
+                    return e.year === w.year && e.week === w.week && r.district === dist;
+                });
+                let hasN = allNegatives.some(n => {
+                    let e = getEpiInfo(n.timestamp);
+                    let u = allUsers.find(user => user.id === n.reporterId);
+                    return e.year === w.year && e.week === w.week && (u ? u.district : null) === dist;
+                });
+                if(hasR || hasN) count++;
+            });
+
+            let perc = (count / weeks.length) * 100;
+            document.getElementById('ind1-res').innerText = perc.toFixed(1) + '%';
+            document.getElementById('ind1-desc').innerText = `${count} semanas c/ notificação / ${weeks.length} avaliadas`;
+        }
+
+        // Ind 2: % de líderes com notificações
+        function calcInd2() {
+            const y = document.getElementById('ind2-year').value;
+            const ws = document.getElementById('ind2-ws').value;
+            const we = document.getElementById('ind2-we').value;
+            const userId = document.getElementById('ind2-user').value;
+
+            const weeks = getSelectedWeeksArray(y, ws, we);
+            if(weeks.length === 0 || !userId) { 
+                document.getElementById('ind2-res').innerText = '0%'; 
+                document.getElementById('ind2-desc').innerText = `Selecione um líder.`;
+                return; 
+            }
+
+            let count = 0;
+            weeks.forEach(w => {
+                let hasR = allRumors.some(r => {
+                    let e = getEpiInfo(r.createdAt);
+                    return e.year === w.year && e.week === w.week && r.reporterId === userId;
+                });
+                let hasN = allNegatives.some(n => {
+                    let e = getEpiInfo(n.timestamp);
+                    return e.year === w.year && e.week === w.week && n.reporterId === userId;
+                });
+                if(hasR || hasN) count++;
+            });
+
+            let perc = (count / weeks.length) * 100;
+            document.getElementById('ind2-res').innerText = perc.toFixed(1) + '%';
+            document.getElementById('ind2-desc').innerText = `${count} semanas c/ notificação / ${weeks.length} avaliadas`;
+        }
+
+        // Ind 3: % de positividade por Distrito
+        function calcInd3() {
+            const y = document.getElementById('ind3-year').value;
+            const ws = document.getElementById('ind3-ws').value;
+            const we = document.getElementById('ind3-we').value;
+            const dist = document.getElementById('ind3-dist').value;
+
+            const weeks = getSelectedWeeksArray(y, ws, we);
+            if(weeks.length === 0 || !dist) { 
+                document.getElementById('ind3-res').innerText = '0%'; 
+                document.getElementById('ind3-desc').innerText = `Selecione um distrito.`;
+                return; 
+            }
+
+            let countPos = 0;
+            let countNonSilent = 0;
+
+            weeks.forEach(w => {
+                let hasR = allRumors.some(r => {
+                    let e = getEpiInfo(r.createdAt);
+                    return e.year === w.year && e.week === w.week && r.district === dist;
+                });
+                let hasN = allNegatives.some(n => {
+                    let e = getEpiInfo(n.timestamp);
+                    let u = allUsers.find(user => user.id === n.reporterId);
+                    return e.year === w.year && e.week === w.week && (u ? u.district : null) === dist;
+                });
+
+                if(hasR) countPos++;
+                if(hasR || hasN) countNonSilent++;
+            });
+
+            let perc = countNonSilent > 0 ? (countPos / countNonSilent) * 100 : 0;
+            document.getElementById('ind3-res').innerText = perc.toFixed(1) + '%';
+            document.getElementById('ind3-desc').innerText = `${countPos} semanas c/ relato / ${countNonSilent} semanas não-silenciosas`;
+        }
+
+        // Ind 4: Tempo médio entre relato e resposta
+        function calcInd4() {
+            const y = document.getElementById('ind4-year').value;
+            const ws = document.getElementById('ind4-ws').value;
+            const we = document.getElementById('ind4-we').value;
+
+            const weeks = getSelectedWeeksArray(y, ws, we);
+            if(weeks.length === 0) { 
+                document.getElementById('ind4-res').innerText = '0'; 
+                document.getElementById('ind4-desc').innerText = `Selecione um período válido.`;
+                return; 
+            }
+
+            let totalDays = 0;
+            let count = 0;
+
+            allRumors.forEach(r => {
+                let e = getEpiInfo(r.createdAt);
+                let inPeriod = weeks.some(w => w.year === e.year && w.week === e.week);
+                
+                if(inPeriod) {
+                    let concl = r.history.find(h => h.status === 'concluido');
+                    if(concl) {
+                        let diffMs = concl.timestamp - r.createdAt;
+                        let diffDays = diffMs / (1000 * 3600 * 24);
+                        totalDays += diffDays;
+                        count++;
+                    }
+                }
+            });
+
+            let avg = count > 0 ? Math.round(totalDays / count) : 0;
+            document.getElementById('ind4-res').innerText = avg;
+            document.getElementById('ind4-desc').innerText = `Média calculada sobre ${count} relatos concluídos`;
+        }
+
+        // =========================================================================
+
+        function populateMapFilters() {
+            const categories = [...new Set(allRumors.map(r => r.category))].filter(Boolean).sort();
+            const catContainer = document.getElementById('filter-cat-map-container');
+            if (catContainer && catContainer.innerHTML.trim() === '') {
+                catContainer.innerHTML = `<div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>` +
+                    categories.map(cat => `<label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="${cat}" class="chk-cat-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">${cat}</span></label>`).join('');
+            }
+
+            const userMap = {};
+            allRumors.forEach(r => { if(r.reporterId) userMap[r.reporterId] = r.reporterName || 'Desconhecido'; });
+            const userEntries = Object.entries(userMap).sort((a,b) => a[1].localeCompare(b[1]));
+            
+            const uContainer = document.getElementById('filter-user-map-container');
+            if (uContainer && uContainer.innerHTML.trim() === '') {
+                uContainer.innerHTML = `<div class="px-2 py-1 text-[9px] text-slate-400 uppercase tracking-widest mb-1">Múltipla Seleção</div>` +
+                    userEntries.map(([id, name]) => `<label class="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" value="${id}" class="chk-user-map text-emerald-500 rounded focus:ring-emerald-500" onchange="renderMapMarkers()" checked> <span class="text-xs font-bold text-slate-700 whitespace-nowrap">${name}</span></label>`).join('');
+            }
+        }
+
+        function getFilteredRumorsList() {
+            if (currentRole === 'observador') return [];
+            let list = currentRole === 'relator' ? allRumors.filter(r => r.reporterId === currentDocUserId) : allRumors;
+            if (currentRole === 'gestor') {
+                const selectedStatus = Array.from(document.querySelectorAll('.chk-status-list:checked')).map(cb => cb.value);
+                const selectedDistricts = Array.from(document.querySelectorAll('.chk-district-list:checked')).map(cb => cb.value);
+                const selectedYears = Array.from(document.querySelectorAll('.chk-year-list:checked')).map(cb => cb.value);
+                const selectedWeeks = Array.from(document.querySelectorAll('.chk-week-list:checked')).map(cb => cb.value);
+                const selectedLeaders = Array.from(document.querySelectorAll('.chk-lider-list:checked')).map(cb => cb.value);
+                
+                list = list.filter(r => {
+                    const epi = getEpiInfo(r.createdAt);
+                    if (!selectedYears.includes(epi.year)) return false;
+                    if (!selectedWeeks.includes(epi.week)) return false;
+                    if (!selectedStatus.includes(r.status)) return false;
+                    const rDist = r.district || '';
+                    if (!selectedDistricts.includes(rDist)) return false;
+                    
+                    // Verifica se o array de líderes selecionados existe (se foi renderizado)
+                    if (selectedLeaders.length > 0) {
+                        const rId = r.reporterId || 'sem-id';
+                        if (!selectedLeaders.includes(rId)) return false;
+                    }
+
+                    return true;
+                });
+            }
+            return list.sort((a, b) => b.createdAt - a.createdAt);
+        }
+
+        function renderRumors() {
+            const tbody = document.getElementById('rumors-table-body');
+            if (!tbody) return;
+            const list = getFilteredRumorsList();
+            if (list.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">Nenhum registro.</td></tr>`; return; }
+            
+            const sMap = { 'novo': 'bg-emerald-50 text-emerald-600', 'investigacao': 'bg-amber-50 text-amber-600', 'concluido': 'bg-teal-50 text-teal-600', 'descartado': 'bg-slate-100 text-slate-500' };
+
+            tbody.innerHTML = list.map(r => `
+                <tr class="hover:bg-slate-50 border-b border-slate-50">
+                    <td class="px-8 py-4"><div class="font-bold text-sm">${r.title}</div><div class="text-[9px] font-black text-emerald-500 uppercase">${r.category}</div></td>
+                    <td class="px-8 py-4"><div class="text-xs font-bold text-slate-600">${r.neighborhood}</div><div class="text-[10px] text-slate-400">${r.district || ''} <span class="block mt-0.5 text-[9px] uppercase tracking-widest text-slate-400">Líder: ${r.reporterName || 'N/A'}</span></div></td>
+                    <td class="px-8 py-4 text-xs text-slate-500">${new Date(r.createdAt).toLocaleDateString('pt-BR')}</td>
+                    <td class="px-8 py-4">
+                        <span class="px-2 py-1 rounded text-[9px] font-black uppercase ${sMap[r.status]||''}">${r.status.replace('_', ' ')}</span>
+                        ${r.classification ? `<span class="ml-1 px-2 py-1 rounded bg-blue-50 text-blue-600 text-[9px] font-black uppercase">${r.classification}</span>` : ''}
+                    </td>
+                    <td class="px-8 py-4 text-right no-print"><button onclick="openModal('${r.id}')" class="text-xs font-bold underline hover:text-emerald-500">${currentRole === 'gestor' ? 'Triagem' : 'Detalhes'}</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function setDashCategoryFilter(cat) {
+            activeDashCategoryFilter = cat;
+            document.getElementById('dash-filter-label').classList.remove('hidden');
+            document.getElementById('dash-active-cat').innerText = cat;
+            updateStats();
+        }
+        function clearDashFilter() {
+            activeDashCategoryFilter = null;
+            document.getElementById('dash-filter-label').classList.add('hidden');
+            updateStats();
+        }
+
+        function updateStats() {
+            const selectedYears = Array.from(document.querySelectorAll('.chk-year-dash:checked')).map(cb => cb.value);
+            const selectedWeeks = Array.from(document.querySelectorAll('.chk-week-dash:checked')).map(cb => cb.value);
+            const selectedDistricts = Array.from(document.querySelectorAll('.chk-district-dash:checked')).map(cb => cb.value);
+
+            let baseList = allRumors.filter(r => {
+                const epi = getEpiInfo(r.createdAt);
+                if (!selectedYears.includes(epi.year)) return false;
+                if (!selectedWeeks.includes(epi.week)) return false;
+                const rDist = r.district || '';
+                if (!selectedDistricts.includes(rDist)) return false;
+                return true;
+            });
+
+            const cats = {}; baseList.forEach(r => cats[r.category] = (cats[r.category] || 0) + 1);
+            const totalBase = baseList.length;
+
+            const reportEl = document.getElementById('category-report');
+            if (reportEl) {
+                reportEl.innerHTML = Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([name, count]) => `
+                    <div class="cursor-pointer group" onclick="setDashCategoryFilter('${name}')">
+                        <div class="flex justify-between text-[10px] font-black uppercase mb-1 tracking-widest"><span class="${activeDashCategoryFilter === name ? 'text-emerald-500' : 'text-slate-500'} group-hover:text-emerald-400 transition-colors">${name}</span><span class="text-slate-800">${count}</span></div>
+                        <div class="w-full bg-slate-100 rounded-full h-2"><div class="${activeDashCategoryFilter === name ? 'bg-emerald-500' : 'bg-slate-300'} h-2 rounded-full transition-all" style="width: ${(count/(totalBase||1))*100}%"></div></div>
+                    </div>`).join('');
+            }
+
+            let cardList = activeDashCategoryFilter ? baseList.filter(r => r.category === activeDashCategoryFilter) : baseList;
+            
+            if (document.getElementById('dash-total')) {
+                document.getElementById('dash-total').innerText = cardList.length;
+                document.getElementById('dash-novos').innerText = cardList.filter(r => r.status === 'novo').length;
+                document.getElementById('dash-analise').innerText = cardList.filter(r => r.status === 'investigacao').length;
+                document.getElementById('dash-concluido').innerText = cardList.filter(r => r.status === 'concluido').length;
+                document.getElementById('dash-descartado').innerText = cardList.filter(r => r.status === 'descartado').length;
+            }
+        }
+
+        function openModal(id) {
+            activeRumorId = id;
+            document.getElementById('evalModal').classList.remove('hidden'); document.getElementById('evalModal').classList.add('flex');
+            document.getElementById('m-note').value = ''; document.getElementById('btnSaveEval').disabled = true;
+            refreshModal();
+        }
+        function closeModal() { activeRumorId = null; document.getElementById('evalModal').classList.add('hidden'); document.getElementById('evalModal').classList.remove('flex'); }
+
+        function refreshModal() {
+            const r = allRumors.find(x => x.id === activeRumorId);
+            if (!r) return;
+            
+            if (currentRole === 'gestor') {
+                document.getElementById('m-status').value = r.status || 'novo';
+                document.getElementById('m-classification').value = r.classification || '';
+            }
+
+            document.getElementById('modal-content').innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <span class="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-2 block">${r.category}</span>
+                        <h3 class="text-3xl font-black text-slate-800 mb-6">${r.title}</h3>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="p-4 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Local</p><p class="text-xs font-bold">${r.street}, ${r.neighborhood}<br><span class="text-[10px] font-normal text-slate-500">${r.district ? r.district + ' - ' : ''}${r.city}</span></p></div>
+                            <div class="p-4 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Envolvidos</p><p class="text-xs font-bold">${r.involvedCount || 'Não informado'}</p></div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="p-4 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Líder (Relator)</p><p class="text-xs font-bold text-slate-800">${r.reporterName || 'Não identificado'}</p></div>
+                            <div class="p-4 bg-slate-50 rounded-xl"><p class="text-[9px] font-black text-slate-400 uppercase mb-1">Contato Local (Informado)</p><p class="text-xs font-bold">${r.communityContactName || r.contactName || 'Não informado'}<br><span class="text-[10px] font-normal text-slate-500">${r.contact && r.contact !== 'N/A' ? r.contact : 'Sem telefone'}</span></p></div>
+                        </div>
+
+                        ${r.affected && r.affected.length > 0 ? `
+                        <div class="mb-4">
+                            <p class="text-[9px] font-black text-slate-400 uppercase mb-2">Afetados</p>
+                            <div class="flex flex-wrap gap-2">
+                                ${r.affected.map(a => `<span class="px-2 py-1 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold uppercase">${a}</span>`).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <div class="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100 text-sm text-slate-700 italic">"${r.description}"</div>
+                    </div>
+                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 h-full overflow-y-auto max-h-[400px]">
+                        <h4 class="text-[11px] font-black uppercase text-slate-500 mb-6 flex gap-2"><i data-lucide="history" class="w-4 h-4"></i> Histórico</h4>
+                        <div class="space-y-4 border-l-2 border-slate-200 pl-4 ml-2">
+                            ${r.history.map(h => `
+                                <div class="relative">
+                                    <div class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase">${new Date(h.timestamp).toLocaleString('pt-BR')}</p>
+                                    <p class="text-xs font-black uppercase text-slate-800">${h.status}</p>
+                                    <p class="text-xs text-slate-600 mt-1">${h.note}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        document.getElementById('btnSaveEval').onclick = () => {
+            const s = document.getElementById('m-status').value;
+            const c = document.getElementById('m-classification').value;
+            const n = document.getElementById('m-note').value;
+            
+            const index = allRumors.findIndex(x => x.id === activeRumorId);
+            if(index !== -1) {
+                const r = allRumors[index];
+                const h = [...r.history, { status: s, note: n, timestamp: Date.now() }];
+                
+                allRumors[index].status = s; allRumors[index].classification = c; allRumors[index].history = h;
+                
+                triggerDataUpdate(); closeModal(); showToast("Atualizado", "A triagem do relato foi salva.", "check-circle");
+            }
+        };
+
+        document.getElementById('rumorForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btnSubmit = document.querySelector('#rumorForm button[type="submit"]');
+            const originalBtnText = btnSubmit.innerHTML;
+            btnSubmit.innerText = "Processando Localização..."; btnSubmit.disabled = true;
+
+            try {
+                const affectedCheckboxes = Array.from(document.querySelectorAll('input[name="f-affected"]:checked')).map(cb => cb.value);
+                const affectedOtherText = document.getElementById('f-affected-other-text').value;
+                const finalAffected = affectedCheckboxes.map(val => val === 'Outro' ? `Outro (${affectedOtherText})` : val);
+
+                if (finalAffected.length === 0) { showToast("Atenção", "Selecione pelo menos uma opção em 'Quem são os afetados?'.", "alert-triangle"); return; }
+
+                // Pega o nome do usuário ativo (Relator)
+                const currentUser = allUsers.find(u => u.id === currentDocUserId);
+                const loggedInUserName = currentUser ? currentUser.name : 'Usuário Não Identificado';
+
+                const data = {
+                    id: generateId(), 
+                    title: document.getElementById('f-title').value, 
+                    category: document.getElementById('f-category').value,
+                    involvedCount: document.getElementById('f-involved-count').value, 
+                    affected: finalAffected, 
+                    street: document.getElementById('f-street').value,
+                    neighborhood: document.getElementById('f-neighborhood').value, 
+                    district: document.getElementById('f-district').value, 
+                    city: document.getElementById('f-city').value,
+                    description: document.getElementById('f-description').value, 
+                    
+                    // Salva o nome de quem reportou (Usuário Logado) corretamente
+                    reporterName: loggedInUserName,
+                    reporterId: currentDocUserId, 
+                    
+                    // Salva o contato do formulário separadamente
+                    communityContactName: document.getElementById('f-name').value || 'Não informado',
+                    contact: document.getElementById('f-contact').value || 'N/A', 
+                    
+                    status: 'novo', 
+                    classification: '', 
+                    createdAt: Date.now(),
+                    lat: null, 
+                    lng: null, 
+                    history: [{ status: 'novo', note: 'Relato cadastrado.', timestamp: Date.now() }]
+                };
+                
+                try {
+                    const coords = await geocodeAddress(data.street, data.neighborhood, data.city);
+                    if (coords) { data.lat = coords.lat; data.lng = coords.lng; }
+                } catch(geoErr) {}
+
+                allRumors.push(data);
+                triggerDataUpdate(); 
+                
+                document.getElementById('rumorForm').reset();
+                showView('list'); showToast("Sucesso", "Relato registrado com sucesso!", "check-circle");
+            } catch(e) {
+                showToast("Erro", "Ocorreu um erro ao salvar o registro.", "x-circle");
+            } finally {
+                btnSubmit.innerHTML = originalBtnText; btnSubmit.disabled = false;
+            }
+        };
+
+        function getWeekString(d) {
+            const epi = getEpiInfo(d.getTime());
+            return `Semana ${epi.week} de ${epi.year}`;
+        }
+
+        function populateNegativeFilters() {
+            const years = new Set(); const weeks = new Set();
+            const leadersMap = {};
+
+            allNegatives.forEach(n => {
+                const epi = getEpiInfo(n.timestamp);
+                years.add(epi.year); weeks.add(epi.week);
+                
+                const rId = n.reporterId || 'sem-id';
+                leadersMap[rId] = n.reporterName || 'Desconhecido';
+            });
+            
+            const sortedYears = Array.from(years).sort().reverse();
+            const sortedWeeks = Array.from(weeks).sort((a,b) => parseInt(a) - parseInt(b));
+            const leaderEntries = Object.entries(leadersMap).sort((a,b) => a[1].localeCompare(b[1]));
+
+            const yearOps = `<option value="todos">Todos os Anos</option>` + sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
+            const weekOps = `<option value="todas">Todas as Semanas</option>` + sortedWeeks.map(w => `<option value="${w}">Semana ${w}</option>`).join('');
+            const leaderOps = `<option value="todos">Todos os Líderes</option>` + leaderEntries.map(([id, name]) => `<option value="${id}">${name}</option>`).join('');
+            
+            const ySel = document.getElementById('filter-year-negatives'); 
+            const wSel = document.getElementById('filter-week-negatives');
+            const lSel = document.getElementById('filter-lider-negatives');
+
+            if (!ySel || !wSel) return;
+            const yVal = ySel.value; const wVal = wSel.value;
+            ySel.innerHTML = yearOps; wSel.innerHTML = weekOps;
+            if(sortedYears.includes(yVal)) ySel.value = yVal; 
+            if(sortedWeeks.includes(wVal)) wSel.value = wVal;
+
+            if (lSel) {
+                const lVal = lSel.value;
+                lSel.innerHTML = leaderOps;
+                if(leaderEntries.find(x => x[0] === lVal)) lSel.value = lVal;
+            }
+        }
+
+        document.getElementById('negativeForm').onsubmit = (e) => {
+            e.preventDefault();
+            const name = document.getElementById('n-name').value;
+            const neighborhood = document.getElementById('n-neighborhood').value;
+            
+            allNegatives.push({
+                id: generateId(), reporterId: currentDocUserId, reporterEmail: currentUserEmail, reporterName: name,
+                neighborhood: neighborhood, week: getWeekString(new Date()), timestamp: Date.now()
+            });
+
+            triggerDataUpdate();
+            showToast("Sucesso", "Relato ausente registrado com sucesso!", "check-circle");
+            document.getElementById('negativeForm').reset(); showView('landing');
+        };
+
+        function getFilteredNegativesList() {
+            if (currentRole === 'observador') return [];
+            const yearF = document.getElementById('filter-year-negatives')?.value || 'todos';
+            const weekF = document.getElementById('filter-week-negatives')?.value || 'todas';
+            const liderF = document.getElementById('filter-lider-negatives')?.value || 'todos';
+            
+            let list = currentRole === 'relator' ? allNegatives.filter(n => n.reporterId === currentDocUserId) : allNegatives;
+            
+            if (yearF !== 'todos' || weekF !== 'todas' || liderF !== 'todos') {
+                list = list.filter(n => {
+                    const epi = getEpiInfo(n.timestamp);
+                    const matchY = yearF === 'todos' || epi.year === yearF;
+                    const matchW = weekF === 'todas' || epi.week === weekF;
+                    const nId = n.reporterId || 'sem-id';
+                    const matchL = liderF === 'todos' || nId === liderF;
+                    
+                    return matchY && matchW && matchL;
+                });
+            }
+
+            return list.sort((a,b) => b.timestamp - a.timestamp);
+        }
+
+        function renderNegatives() {
+            const tbody = document.getElementById('negatives-table-body');
+            if(!tbody) return;
+            
+            const list = getFilteredNegativesList();
+
+            if (list.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="px-8 py-10 text-center text-slate-400 italic">Nenhum registro encontrado.</td></tr>`; return; }
+
+            tbody.innerHTML = list.map(n => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-8 py-4 font-bold text-xs text-slate-800">${n.week}</td>
+                    <td class="px-8 py-4"><div class="text-xs font-bold text-slate-700">${n.reporterName || 'N/A'}</div><div class="text-[10px] text-slate-500">${n.neighborhood || 'N/A'} <span class="font-mono text-[9px]">(${n.reporterEmail})</span></div></td>
+                    <td class="px-8 py-4 text-xs text-slate-400">${new Date(n.timestamp).toLocaleString('pt-BR')}</td>
+                </tr>
+            `).join('');
+        }
+
+        function loadProfileData() {
+            const user = allUsers.find(u => u.id === currentDocUserId);
+            if (user) {
+                document.getElementById('p-name').value = user.name || ''; document.getElementById('p-email').value = user.email || '';
+                document.getElementById('p-password').value = user.password || ''; document.getElementById('p-dob').value = user.dob || '';
+                document.getElementById('p-gender').value = user.gender || ''; document.getElementById('p-race').value = user.race || '';
+                document.getElementById('p-district').value = user.district || ''; document.getElementById('p-cep').value = user.cep || '';
+                document.getElementById('p-logradouro').value = user.logradouro || ''; document.getElementById('p-bairro').value = user.bairro || '';
+                if(user.numero === 'S/N') { document.getElementById('p-sn').checked = true; toggleSN('p-sn', 'p-numero'); } 
+                else { document.getElementById('p-sn').checked = false; document.getElementById('p-numero').value = user.numero || ''; toggleSN('p-sn', 'p-numero'); }
+                document.querySelectorAll('input[name="p-role-checkbox"]').forEach(cb => { cb.checked = (user.roles || []).includes(cb.value); });
+            }
+        }
+
+        document.getElementById('profileForm').onsubmit = (e) => {
+            e.preventDefault();
+            const r = Array.from(document.querySelectorAll('input[name="p-role-checkbox"]:checked')).map(c=>c.value);
+            if(r.length === 0) { showToast("Aviso", "Você precisa de ao menos um perfil.", "alert-triangle"); return; }
+            
+            const index = allUsers.findIndex(u => u.id === currentDocUserId);
+            if (index !== -1) {
+                const snChecked = document.getElementById('p-sn').checked;
+                const logradouro = document.getElementById('p-logradouro').value;
+                const numero = snChecked ? 'S/N' : document.getElementById('p-numero').value;
+                const bairro = document.getElementById('p-bairro').value;
+                const cep = document.getElementById('p-cep').value;
+
+                const hasAddressChanged = allUsers[index].logradouro !== logradouro || allUsers[index].numero !== numero || allUsers[index].bairro !== bairro;
+
+                allUsers[index].name = document.getElementById('p-name').value; allUsers[index].email = document.getElementById('p-email').value;
+                allUsers[index].password = document.getElementById('p-password').value; allUsers[index].dob = document.getElementById('p-dob').value;
+                allUsers[index].gender = document.getElementById('p-gender').value; allUsers[index].race = document.getElementById('p-race').value;
+                allUsers[index].district = document.getElementById('p-district').value; allUsers[index].roles = r;
+                allUsers[index].cep = cep; allUsers[index].logradouro = logradouro; allUsers[index].numero = numero; allUsers[index].bairro = bairro;
+
+                if (hasAddressChanged) {
+                    const addressQuery = `${logradouro}${numero !== 'S/N' ? ', ' + numero : ''}`;
+                    geocodeAddress(addressQuery, bairro, 'Contagem').then(coords => {
+                        if(coords) { allUsers[index].lat = coords.lat; allUsers[index].lng = coords.lng; triggerDataUpdate(); }
+                    });
+                }
+                triggerDataUpdate(); showToast("Sucesso", "Seu perfil foi atualizado!", "check-circle");
+            }
+        };
+
+        function updateUserStats() {
+            if (!document.getElementById('u-dash-total')) return;
+            document.getElementById('u-dash-total').innerText = allUsers.length;
+            document.getElementById('u-dash-relator').innerText = allUsers.filter(u => u.status === 'approved' && (u.roles||[]).includes('relator')).length;
+            document.getElementById('u-dash-pendente').innerText = allUsers.filter(u => u.status === 'pending').length;
+            const distritos = new Set(allUsers.filter(u => u.district).map(u => u.district));
+            document.getElementById('u-dash-distritos').innerText = distritos.size;
+        }
+
+        window.sortUsers = (col) => {
+            if (userSortCol === col) userSortAsc = !userSortAsc; else { userSortCol = col; userSortAsc = true; }
+            renderUsers();
+        };
+
+        function renderUsers() {
+            const tbody = document.getElementById('users-table-body');
+            if (!tbody) return;
+
+            const roleF = document.getElementById('filter-u-role')?.value || 'todos';
+            const distF = document.getElementById('filter-u-district')?.value || 'todos';
+            const statF = document.getElementById('filter-u-status')?.value || 'todos';
+
+            let list = allUsers;
+            if (statF !== 'todos') list = list.filter(u => u.status === statF);
+            if (roleF !== 'todos') list = list.filter(u => (u.roles || []).includes(roleF));
+            if (distF !== 'todos') list = list.filter(u => u.district === distF);
+
+            list.sort((a, b) => {
+                let valA = a[userSortCol] || ''; let valB = b[userSortCol] || '';
+                if(userSortCol === 'roles') { valA = (a.roles||[]).join(''); valB = (b.roles||[]).join(''); }
+                if (typeof valA === 'string') valA = valA.toLowerCase(); if (typeof valB === 'string') valB = valB.toLowerCase();
+                if (valA < valB) return userSortAsc ? -1 : 1; if (valA > valB) return userSortAsc ? 1 : -1;
+                return 0;
+            });
+
+            if (list.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-400 italic">Nenhum usuário encontrado.</td></tr>`; return; }
+
+            const statusStyles = { 'pending': 'bg-amber-50 text-amber-600', 'approved': 'bg-emerald-50 text-emerald-600', 'rejected': 'bg-red-50 text-red-600' };
+            const statusLabels = { 'pending': 'Pendente', 'approved': 'Aprovado', 'rejected': 'Reprovado' };
+
+            tbody.innerHTML = list.map(u => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-6 py-4"><div class="font-bold text-slate-800">${u.name || 'Não informado'}</div><div class="text-[10px] text-slate-500">${u.email} <span class="font-mono text-slate-300 ml-1" title="Senha oculta por segurança">(Senha: ${u.password})</span></div></td>
+                    <td class="px-6 py-4"><div class="text-xs font-bold text-slate-700">${u.district || '-'}</div><div class="text-[9px] text-slate-400 mt-0.5">${u.gender || '-'} • ${u.race || '-'}</div></td>
+                    <td class="px-6 py-4 text-[9px] text-slate-400 uppercase font-bold">${(u.roles||[]).join(' + ')}</td>
+                    <td class="px-6 py-4"><span class="px-2 py-1 rounded text-[9px] font-black uppercase ${statusStyles[u.status] || 'bg-slate-100'}">${statusLabels[u.status] || 'Desconhecido'}</span></td>
+                    <td class="px-6 py-4 text-right whitespace-nowrap space-x-2">
+                        ${u.status === 'pending' ? `
+                            <button onclick="approveUser('${u.id}')" class="p-2 text-emerald-400 hover:text-emerald-600 transition-colors" title="Aprovar Acesso"><i data-lucide="check-circle" class="w-4 h-4"></i></button>
+                            <button onclick="rejectUser('${u.id}')" class="p-2 text-amber-400 hover:text-amber-600 transition-colors" title="Reprovar Acesso"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        ` : ''}
+                        <button onclick="editUser('${u.id}')" class="p-2 text-blue-400 hover:text-blue-600 transition-colors" title="Editar"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>
+            `).join(''); 
+            lucide.createIcons();
+        }
+
+        document.getElementById('userForm').onsubmit = (e) => {
+            e.preventDefault();
+            if (!editingUserId) return;
+            const r = Array.from(document.querySelectorAll('input[name="u-role-checkbox"]:checked')).map(c=>c.value);
+            if(r.length === 0) { showToast("Aviso", "Selecione ao menos um perfil.", "alert-triangle"); return; }
+            
+            const index = allUsers.findIndex(u => u.id === editingUserId);
+            if(index !== -1) {
+                allUsers[index].email = document.getElementById('u-email').value; allUsers[index].password = document.getElementById('u-password').value;
+                allUsers[index].roles = r; allUsers[index].status = document.getElementById('u-status').value;
+                triggerDataUpdate(); cancelEditUser(); showToast("Sucesso", "Acesso do usuário atualizado!", "check-circle");
+            }
+        };
+
+        window.editUser = (id) => {
+            const user = allUsers.find(u => u.id === id);
+            if(user) {
+                editingUserId = id;
+                document.getElementById('edit-user-placeholder').classList.add('hidden'); document.getElementById('edit-user-form-container').classList.remove('hidden');
+                document.getElementById('u-name').value = user.name || ''; document.getElementById('u-email').value = user.email || '';
+                document.getElementById('u-password').value = user.password || ''; document.getElementById('u-dob').value = user.dob || '';
+                document.getElementById('u-gender').value = user.gender || ''; document.getElementById('u-race').value = user.race || '';
+                document.getElementById('u-district').value = user.district || ''; document.getElementById('u-cep').value = user.cep || '';
+                document.getElementById('u-logradouro').value = user.logradouro || ''; document.getElementById('u-numero').value = user.numero || '';
+                document.getElementById('u-bairro').value = user.bairro || '';
+                
+                document.querySelectorAll('input[name="u-role-checkbox"]').forEach(cb => { cb.checked = (user.roles || []).includes(cb.value); });
+                document.getElementById('u-status').value = user.status || 'approved'; window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        };
+
+        window.cancelEditUser = () => {
+            editingUserId = null; document.getElementById('userForm').reset();
+            document.getElementById('edit-user-form-container').classList.add('hidden'); document.getElementById('edit-user-placeholder').classList.remove('hidden');
+        };
+
+        window.approveUser = (id) => { const index = allUsers.findIndex(u => u.id === id); if (index !== -1) { allUsers[index].status = 'approved'; triggerDataUpdate(); showToast("Aprovado", "O usuário agora tem permissão de login.", "check-circle"); } }
+        window.rejectUser = (id) => { const index = allUsers.findIndex(u => u.id === id); if (index !== -1) { allUsers[index].status = 'rejected'; triggerDataUpdate(); showToast("Reprovado", "O usuário teve o acesso bloqueado.", "x-circle"); } }
+
+        function exportToPDF(containerId, fileName) {
+            showToast("Gerando PDF", "Aguarde um momento enquanto o documento é preparado...", "download");
+            const element = document.getElementById(containerId);
+            const noPrintEls = element.querySelectorAll('.no-print');
+            const originalDisplays = [];
+            noPrintEls.forEach((el, index) => { originalDisplays[index] = el.style.display; el.style.display = 'none'; });
+
+            const opt = { margin: [10, 10, 10, 10], filename: fileName, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } };
+            html2pdf().set(opt).from(element).save().then(() => {
+                noPrintEls.forEach((el, index) => { el.style.display = originalDisplays[index]; }); showToast("Sucesso", "O download do PDF foi concluído.", "check-circle");
+            }).catch(err => {
+                noPrintEls.forEach((el, index) => { el.style.display = originalDisplays[index]; }); showToast("Erro", "Falha ao gerar o arquivo PDF.", "x-circle");
+            });
+        }
+
+        function showView(id) { 
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active')); 
+            document.getElementById(`view-${id}`).classList.add('active'); 
+            window.scrollTo(0, 0); 
+            lucide.createIcons(); 
+            
+            if (id === 'map') setTimeout(initMap, 200);
+            if (id === 'users') setTimeout(initUserMap, 200);
+            if (id === 'profile') loadProfileData();
+            if (id === 'indicadores') populateIndicatorDropdowns();
+        }
+
+        async function geocodeAddress(street, neighborhood, city) {
+            if(!street || !neighborhood) return null;
+            const query = `${street}, ${neighborhood}, ${city}, Minas Gerais, Brasil`;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+            const controller = new AbortController(); const timeoutId = setTimeout(() => controller.abort(), 4000); 
+
+            try {
+                const res = await fetch(url, { signal: controller.signal, headers: { 'Accept-Language': 'pt-BR' } });
+                clearTimeout(timeoutId);
+                if (!res.ok) return null;
+                const data = await res.json();
+                if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            } catch(e) { clearTimeout(timeoutId); } return null;
+        }
+
+        function initMap() {
+            if (!mapInstance) {
+                mapInstance = L.map('map-container').setView([-19.9321, -44.0539], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(mapInstance);
+                mapLayerGroup = L.layerGroup().addTo(mapInstance);
+            }
+            mapInstance.invalidateSize(); renderMapMarkers();
+        }
+
+        function initUserMap() {
+            if (!userMapInstance && document.getElementById('users-map-container')) {
+                userMapInstance = L.map('users-map-container').setView([-19.9321, -44.0539], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(userMapInstance);
+                userMapLayerGroup = L.layerGroup().addTo(userMapInstance);
+            }
+            if (userMapInstance) { userMapInstance.invalidateSize(); renderUserMapMarkers(); }
+        }
+
+        async function renderMapMarkers() {
+            if (!mapInstance || !mapLayerGroup) return;
+            mapLayerGroup.clearLayers();
+            const selYears = Array.from(document.querySelectorAll('.chk-year-map:checked')).map(c=>c.value);
+            const selWeeks = Array.from(document.querySelectorAll('.chk-week-map:checked')).map(c=>c.value);
+            const selDist = Array.from(document.querySelectorAll('.chk-district-map:checked')).map(c=>c.value);
+            const selCat = Array.from(document.querySelectorAll('.chk-cat-map:checked')).map(c=>c.value);
+            const selUser = Array.from(document.querySelectorAll('.chk-user-map:checked')).map(c=>c.value);
+
+            let list = currentRole === 'relator' ? allRumors.filter(r => r.reporterId === currentDocUserId) : allRumors;
+            if (currentRole === 'observador') list = [];
+            
+            if(document.querySelectorAll('.chk-year-map').length > 0 && list.length > 0) {
+                list = list.filter(r => {
+                    const epi = getEpiInfo(r.createdAt);
+                    if (!selYears.includes(epi.year)) return false; if (!selWeeks.includes(epi.week)) return false;
+                    if (!selDist.includes(r.district || '')) return false; if (!selCat.includes(r.category)) return false;
+                    if (!selUser.includes(r.reporterId)) return false; return true;
+                });
+            }
+
+            const rumorsToMap = list.slice(0, 200);
+
+            for (const r of rumorsToMap) {
+                let lat = r.lat; let lng = r.lng;
+                if (!lat || !lng) {
+                    const coords = await geocodeAddress(r.street, r.neighborhood, r.city);
+                    if (coords) {
+                        lat = coords.lat; lng = coords.lng;
+                        const index = allRumors.findIndex(x => x.id === r.id);
+                        if (index !== -1) { allRumors[index].lat = lat; allRumors[index].lng = lng; saveData(); }
+                        await new Promise(resolve => setTimeout(resolve, 1100)); 
+                    }
+                }
+
+                if (lat && lng) {
+                    let color = '#94a3b8'; if (r.status === 'novo') color = '#ef4444'; else if (r.status === 'investigacao') color = '#f59e0b'; else if (r.status === 'concluido') color = '#10b981';
+                    const markerHtml = `<div style="background-color: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`;
+                    const icon = L.divIcon({ html: markerHtml, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
+                    const marker = L.marker([lat, lng], { icon }).addTo(mapLayerGroup);
+                    marker.bindPopup(`
+                        <div class="p-1 min-w-[180px]">
+                            <span class="text-[9px] font-black uppercase text-emerald-500 block mb-1">${r.category}</span>
+                            <strong class="text-sm text-slate-800 leading-tight block mb-2">${r.title}</strong>
+                            <p class="text-xs text-slate-500 mb-2">${r.street}, ${r.neighborhood} ${r.district ? '<br>('+r.district+')' : ''}</p>
+                            <span class="text-[9px] font-bold uppercase px-2 py-1 bg-slate-100 rounded text-slate-600">${r.status.replace('_', ' ')}</span>
+                            <div class="mt-3 text-right"><button onclick="openModal('${r.id}')" class="text-[10px] font-bold text-emerald-600 hover:underline">Ver Detalhes</button></div>
+                        </div>
+                    `);
+                }
+            }
+        }
+
+        async function renderUserMapMarkers() {
+            if (!userMapInstance || !userMapLayerGroup) return;
+            userMapLayerGroup.clearLayers();
+            const roleF = document.getElementById('filter-u-role')?.value || 'todos';
+            const distF = document.getElementById('filter-u-district')?.value || 'todos';
+            const statF = document.getElementById('filter-u-status')?.value || 'todos';
+
+            let listToMap = allUsers;
+            if (statF !== 'todos') listToMap = listToMap.filter(u => u.status === statF);
+            if (roleF !== 'todos') listToMap = listToMap.filter(u => (u.roles || []).includes(roleF));
+            if (distF !== 'todos') listToMap = listToMap.filter(u => u.district === distF);
+
+            for (const u of listToMap) {
+                let lat = u.lat; let lng = u.lng;
+                if ((!lat || !lng) && u.logradouro && u.bairro) {
+                    const addressQuery = `${u.logradouro}${u.numero && u.numero !== 'S/N' ? ', ' + u.numero : ''}`;
+                    const coords = await geocodeAddress(addressQuery, u.bairro, 'Contagem');
+                    if (coords) {
+                        lat = coords.lat; lng = coords.lng;
+                        const index = allUsers.findIndex(x => x.id === u.id);
+                        if (index !== -1) { allUsers[index].lat = lat; allUsers[index].lng = lng; saveData(); }
+                        await new Promise(resolve => setTimeout(resolve, 1100));
+                    }
+                }
+
+                if (lat && lng) {
+                    let color = '#f59e0b'; if (u.status === 'approved') color = '#10b981'; else if (u.status === 'rejected') color = '#ef4444';
+                    const markerHtml = `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`;
+                    const icon = L.divIcon({ html: markerHtml, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
+                    const marker = L.marker([lat, lng], { icon }).addTo(userMapLayerGroup);
+                    marker.bindPopup(`
+                        <div class="p-1 min-w-[150px]">
+                            <strong class="text-xs text-slate-800 leading-tight block mb-1">${u.name || 'Anônimo'}</strong>
+                            <p class="text-[10px] text-slate-500 mb-2">${u.logradouro}, ${u.numero}<br>${u.bairro}</p>
+                            <span class="text-[9px] font-bold uppercase px-2 py-1 bg-slate-100 rounded text-slate-600">${u.status === 'approved' ? 'Aprovado' : u.status === 'pending' ? 'Pendente' : 'Reprovado'}</span>
+                        </div>
+                    `);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
